@@ -36,9 +36,9 @@ public class PredicateEvaluatorProvider {
   }
 
   public static PredicateEvaluator getPredicateEvaluator(Predicate predicate, @Nullable Dictionary dictionary,
-      DataType dataType) {
+      DataType dataType, boolean hasDictionaryWithCompression) {
     try {
-      if (dictionary != null) {
+      if (dictionary != null && !hasDictionaryWithCompression) {
         // dictionary based predicate evaluators
         switch (predicate.getType()) {
           case EQ:
@@ -66,15 +66,20 @@ public class PredicateEvaluatorProvider {
         // raw value based predicate evaluators
         switch (predicate.getType()) {
           case EQ:
-            return EqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator((EqPredicate) predicate, dataType);
+            return EqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator((EqPredicate) predicate, dataType,
+                hasDictionaryWithCompression, dictionary);
           case NOT_EQ:
-            return NotEqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator((NotEqPredicate) predicate, dataType);
+            return NotEqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator((NotEqPredicate) predicate, dataType,
+                hasDictionaryWithCompression, dictionary);
           case IN:
-            return InPredicateEvaluatorFactory.newRawValueBasedEvaluator((InPredicate) predicate, dataType);
+            return InPredicateEvaluatorFactory.newRawValueBasedEvaluator((InPredicate) predicate, dataType,
+                hasDictionaryWithCompression, dictionary);
           case NOT_IN:
-            return NotInPredicateEvaluatorFactory.newRawValueBasedEvaluator((NotInPredicate) predicate, dataType);
+            return NotInPredicateEvaluatorFactory.newRawValueBasedEvaluator((NotInPredicate) predicate, dataType,
+                hasDictionaryWithCompression, dictionary);
           case RANGE:
-            return RangePredicateEvaluatorFactory.newRawValueBasedEvaluator((RangePredicate) predicate, dataType);
+            return RangePredicateEvaluatorFactory.newRawValueBasedEvaluator((RangePredicate) predicate, dataType,
+                hasDictionaryWithCompression, dictionary);
           case REGEXP_LIKE:
             return RegexpLikePredicateEvaluatorFactory
                 .newRawValueBasedEvaluator((RegexpLikePredicate) predicate, dataType);

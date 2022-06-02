@@ -97,6 +97,11 @@ public class VirtualColumnIndexContainer implements ColumnIndexContainer {
   }
 
   @Override
+  public boolean hasDictionaryWithCompression() {
+    return false;
+  }
+
+  @Override
   public void close()
       throws IOException {
     _forwardIndex.close();

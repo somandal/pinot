@@ -159,7 +159,7 @@ class FilePerIndexDirectory extends ColumnIndexDirectory {
       case FORWARD_INDEX:
         ColumnMetadata columnMetadata = _segmentMetadata.getColumnMetadataFor(column);
         if (columnMetadata.isSingleValue()) {
-          if (!columnMetadata.hasDictionary()) {
+          if (!columnMetadata.hasDictionary() || columnMetadata.hasDictionaryWithCompression()) {
             fileExtension = V1Constants.Indexes.RAW_SV_FORWARD_INDEX_FILE_EXTENSION;
           } else if (columnMetadata.isSorted()) {
             fileExtension = V1Constants.Indexes.SORTED_SV_FORWARD_INDEX_FILE_EXTENSION;
@@ -167,7 +167,7 @@ class FilePerIndexDirectory extends ColumnIndexDirectory {
             fileExtension = V1Constants.Indexes.UNSORTED_SV_FORWARD_INDEX_FILE_EXTENSION;
           }
         } else {
-          if (!columnMetadata.hasDictionary()) {
+          if (!columnMetadata.hasDictionary() || columnMetadata.hasDictionaryWithCompression()) {
             fileExtension = V1Constants.Indexes.RAW_MV_FORWARD_INDEX_FILE_EXTENSION;
           } else {
             fileExtension = V1Constants.Indexes.UNSORTED_MV_FORWARD_INDEX_FILE_EXTENSION;

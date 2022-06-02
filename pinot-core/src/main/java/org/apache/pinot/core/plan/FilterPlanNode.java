@@ -272,7 +272,7 @@ public class FilterPlanNode implements PlanNode {
               } else {
                 predicateEvaluator =
                     PredicateEvaluatorProvider.getPredicateEvaluator(predicate, dataSource.getDictionary(),
-                        dataSource.getDataSourceMetadata().getDataType());
+                        dataSource.getDataSourceMetadata().getDataType(), dataSource.hasDictionaryWithCompression());
               }
               _predicateEvaluators.add(Pair.of(predicate, predicateEvaluator));
               return FilterOperatorUtils.getLeafFilterOperator(predicateEvaluator, dataSource, numDocs);
@@ -298,7 +298,7 @@ public class FilterPlanNode implements PlanNode {
             default:
               predicateEvaluator =
                   PredicateEvaluatorProvider.getPredicateEvaluator(predicate, dataSource.getDictionary(),
-                      dataSource.getDataSourceMetadata().getDataType());
+                      dataSource.getDataSourceMetadata().getDataType(), dataSource.hasDictionaryWithCompression());
               _predicateEvaluators.add(Pair.of(predicate, predicateEvaluator));
               return FilterOperatorUtils.getLeafFilterOperator(predicateEvaluator, dataSource, numDocs);
           }

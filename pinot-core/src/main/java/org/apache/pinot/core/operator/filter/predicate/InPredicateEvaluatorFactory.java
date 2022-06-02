@@ -32,6 +32,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import javax.annotation.Nullable;
 import org.apache.pinot.common.request.context.predicate.InPredicate;
 import org.apache.pinot.common.utils.HashUtil;
 import org.apache.pinot.segment.spi.index.reader.Dictionary;
@@ -64,10 +65,12 @@ public class InPredicateEvaluatorFactory {
    *
    * @param inPredicate IN predicate to evaluate
    * @param dataType Data type for the column
+   * @param hasDictionaryWithCompression whether dictionary with compression is enabled
+   * @param dictionary for the column
    * @return Raw value based IN predicate evaluator
    */
   public static BaseRawValueBasedPredicateEvaluator newRawValueBasedEvaluator(InPredicate inPredicate,
-      DataType dataType) {
+      DataType dataType, boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
     switch (dataType) {
       case INT: {
         int[] intValues = inPredicate.getIntValues();
@@ -75,7 +78,8 @@ public class InPredicateEvaluatorFactory {
         for (int value : intValues) {
           matchingValues.add(value);
         }
-        return new IntRawValueBasedInPredicateEvaluator(inPredicate, matchingValues);
+        return new IntRawValueBasedInPredicateEvaluator(inPredicate, matchingValues, hasDictionaryWithCompression,
+            dictionary);
       }
       case LONG: {
         long[] longValues = inPredicate.getLongValues();
@@ -83,7 +87,8 @@ public class InPredicateEvaluatorFactory {
         for (long value : longValues) {
           matchingValues.add(value);
         }
-        return new LongRawValueBasedInPredicateEvaluator(inPredicate, matchingValues);
+        return new LongRawValueBasedInPredicateEvaluator(inPredicate, matchingValues, hasDictionaryWithCompression,
+            dictionary);
       }
       case FLOAT: {
         float[] floatValues = inPredicate.getFloatValues();
@@ -91,7 +96,8 @@ public class InPredicateEvaluatorFactory {
         for (float value : floatValues) {
           matchingValues.add(value);
         }
-        return new FloatRawValueBasedInPredicateEvaluator(inPredicate, matchingValues);
+        return new FloatRawValueBasedInPredicateEvaluator(inPredicate, matchingValues, hasDictionaryWithCompression,
+            dictionary);
       }
       case DOUBLE: {
         double[] doubleValues = inPredicate.getDoubleValues();
@@ -99,14 +105,16 @@ public class InPredicateEvaluatorFactory {
         for (double value : doubleValues) {
           matchingValues.add(value);
         }
-        return new DoubleRawValueBasedInPredicateEvaluator(inPredicate, matchingValues);
+        return new DoubleRawValueBasedInPredicateEvaluator(inPredicate, matchingValues, hasDictionaryWithCompression,
+            dictionary);
       }
       case BIG_DECIMAL: {
         BigDecimal[] bigDecimalValues = inPredicate.getBigDecimalValues();
         // NOTE: Use TreeSet because BigDecimal's compareTo() is not consistent with equals()
         //       E.g. compareTo(3.0, 3) returns 0 but equals(3.0, 3) returns false
         TreeSet<BigDecimal> matchingValues = new TreeSet<>(Arrays.asList(bigDecimalValues));
-        return new BigDecimalRawValueBasedInPredicateEvaluator(inPredicate, matchingValues);
+        return new BigDecimalRawValueBasedInPredicateEvaluator(inPredicate, matchingValues,
+            hasDictionaryWithCompression, dictionary);
       }
       case BOOLEAN: {
         int[] booleanValues = inPredicate.getBooleanValues();
@@ -114,7 +122,8 @@ public class InPredicateEvaluatorFactory {
         for (int value : booleanValues) {
           matchingValues.add(value);
         }
-        return new IntRawValueBasedInPredicateEvaluator(inPredicate, matchingValues);
+        return new IntRawValueBasedInPredicateEvaluator(inPredicate, matchingValues, hasDictionaryWithCompression,
+            dictionary);
       }
       case TIMESTAMP: {
         long[] timestampValues = inPredicate.getTimestampValues();
@@ -122,7 +131,8 @@ public class InPredicateEvaluatorFactory {
         for (long value : timestampValues) {
           matchingValues.add(value);
         }
-        return new LongRawValueBasedInPredicateEvaluator(inPredicate, matchingValues);
+        return new LongRawValueBasedInPredicateEvaluator(inPredicate, matchingValues, hasDictionaryWithCompression,
+            dictionary);
       }
       case STRING: {
         List<String> stringValues = inPredicate.getValues();
@@ -132,7 +142,8 @@ public class InPredicateEvaluatorFactory {
           //noinspection UseBulkOperation
           matchingValues.add(value);
         }
-        return new StringRawValueBasedInPredicateEvaluator(inPredicate, matchingValues);
+        return new StringRawValueBasedInPredicateEvaluator(inPredicate, matchingValues, hasDictionaryWithCompression,
+            dictionary);
       }
       case BYTES: {
         ByteArray[] bytesValues = inPredicate.getBytesValues();
@@ -143,7 +154,8 @@ public class InPredicateEvaluatorFactory {
           //noinspection UseBulkOperation
           matchingValues.add(value);
         }
-        return new BytesRawValueBasedInPredicateEvaluator(inPredicate, matchingValues);
+        return new BytesRawValueBasedInPredicateEvaluator(inPredicate, matchingValues, hasDictionaryWithCompression,
+            dictionary);
       }
       default:
         throw new IllegalStateException("Unsupported data type: " + dataType);
@@ -201,9 +213,20 @@ public class InPredicateEvaluatorFactory {
   private static final class IntRawValueBasedInPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final IntSet _matchingValues;
 
-    IntRawValueBasedInPredicateEvaluator(InPredicate inPredicate, IntSet matchingValues) {
+    IntRawValueBasedInPredicateEvaluator(InPredicate inPredicate, IntSet matchingValues,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(inPredicate);
       _matchingValues = matchingValues;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        IntSet matchingDictIdSet = PredicateUtils.getDictIdSet(inPredicate, dictionary, DataType.INT);
+        int numMatchingDictIds = matchingDictIdSet.size();
+        if (numMatchingDictIds == 0) {
+          _alwaysFalse = true;
+        } else if (dictionary.length() == numMatchingDictIds) {
+          _alwaysTrue = true;
+        }
+      }
     }
 
     @Override
@@ -233,9 +256,20 @@ public class InPredicateEvaluatorFactory {
   private static final class LongRawValueBasedInPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final LongSet _matchingValues;
 
-    LongRawValueBasedInPredicateEvaluator(InPredicate inPredicate, LongSet matchingValues) {
+    LongRawValueBasedInPredicateEvaluator(InPredicate inPredicate, LongSet matchingValues,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(inPredicate);
       _matchingValues = matchingValues;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        IntSet matchingDictIdSet = PredicateUtils.getDictIdSet(inPredicate, dictionary, DataType.LONG);
+        int numMatchingDictIds = matchingDictIdSet.size();
+        if (numMatchingDictIds == 0) {
+          _alwaysFalse = true;
+        } else if (dictionary.length() == numMatchingDictIds) {
+          _alwaysTrue = true;
+        }
+      }
     }
 
     @Override
@@ -265,9 +299,20 @@ public class InPredicateEvaluatorFactory {
   private static final class FloatRawValueBasedInPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final FloatSet _matchingValues;
 
-    FloatRawValueBasedInPredicateEvaluator(InPredicate inPredicate, FloatSet matchingValues) {
+    FloatRawValueBasedInPredicateEvaluator(InPredicate inPredicate, FloatSet matchingValues,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(inPredicate);
       _matchingValues = matchingValues;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        IntSet matchingDictIdSet = PredicateUtils.getDictIdSet(inPredicate, dictionary, DataType.FLOAT);
+        int numMatchingDictIds = matchingDictIdSet.size();
+        if (numMatchingDictIds == 0) {
+          _alwaysFalse = true;
+        } else if (dictionary.length() == numMatchingDictIds) {
+          _alwaysTrue = true;
+        }
+      }
     }
 
     @Override
@@ -297,9 +342,20 @@ public class InPredicateEvaluatorFactory {
   private static final class DoubleRawValueBasedInPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final DoubleSet _matchingValues;
 
-    DoubleRawValueBasedInPredicateEvaluator(InPredicate inPredicate, DoubleSet matchingValues) {
+    DoubleRawValueBasedInPredicateEvaluator(InPredicate inPredicate, DoubleSet matchingValues,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(inPredicate);
       _matchingValues = matchingValues;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        IntSet matchingDictIdSet = PredicateUtils.getDictIdSet(inPredicate, dictionary, DataType.DOUBLE);
+        int numMatchingDictIds = matchingDictIdSet.size();
+        if (numMatchingDictIds == 0) {
+          _alwaysFalse = true;
+        } else if (dictionary.length() == numMatchingDictIds) {
+          _alwaysTrue = true;
+        }
+      }
     }
 
     @Override
@@ -335,9 +391,20 @@ public class InPredicateEvaluatorFactory {
     //    the Set interface.
     final TreeSet<BigDecimal> _matchingValues;
 
-    BigDecimalRawValueBasedInPredicateEvaluator(InPredicate inPredicate, TreeSet<BigDecimal> matchingValues) {
+    BigDecimalRawValueBasedInPredicateEvaluator(InPredicate inPredicate, TreeSet<BigDecimal> matchingValues,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(inPredicate);
       _matchingValues = matchingValues;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        IntSet matchingDictIdSet = PredicateUtils.getDictIdSet(inPredicate, dictionary, DataType.BIG_DECIMAL);
+        int numMatchingDictIds = matchingDictIdSet.size();
+        if (numMatchingDictIds == 0) {
+          _alwaysFalse = true;
+        } else if (dictionary.length() == numMatchingDictIds) {
+          _alwaysTrue = true;
+        }
+      }
     }
 
     @Override
@@ -354,9 +421,20 @@ public class InPredicateEvaluatorFactory {
   private static final class StringRawValueBasedInPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final Set<String> _matchingValues;
 
-    StringRawValueBasedInPredicateEvaluator(InPredicate inPredicate, Set<String> matchingValues) {
+    StringRawValueBasedInPredicateEvaluator(InPredicate inPredicate, Set<String> matchingValues,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(inPredicate);
       _matchingValues = matchingValues;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        IntSet matchingDictIdSet = PredicateUtils.getDictIdSet(inPredicate, dictionary, DataType.STRING);
+        int numMatchingDictIds = matchingDictIdSet.size();
+        if (numMatchingDictIds == 0) {
+          _alwaysFalse = true;
+        } else if (dictionary.length() == numMatchingDictIds) {
+          _alwaysTrue = true;
+        }
+      }
     }
 
     @Override
@@ -373,9 +451,20 @@ public class InPredicateEvaluatorFactory {
   private static final class BytesRawValueBasedInPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final Set<ByteArray> _matchingValues;
 
-    BytesRawValueBasedInPredicateEvaluator(InPredicate inPredicate, Set<ByteArray> matchingValues) {
+    BytesRawValueBasedInPredicateEvaluator(InPredicate inPredicate, Set<ByteArray> matchingValues,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(inPredicate);
       _matchingValues = matchingValues;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        IntSet matchingDictIdSet = PredicateUtils.getDictIdSet(inPredicate, dictionary, DataType.BYTES);
+        int numMatchingDictIds = matchingDictIdSet.size();
+        if (numMatchingDictIds == 0) {
+          _alwaysFalse = true;
+        } else if (dictionary.length() == numMatchingDictIds) {
+          _alwaysTrue = true;
+        }
+      }
     }
 
     @Override

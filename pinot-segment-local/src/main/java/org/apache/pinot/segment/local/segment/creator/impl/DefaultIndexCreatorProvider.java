@@ -72,7 +72,7 @@ public final class DefaultIndexCreatorProvider implements IndexCreatorProvider {
   @Override
   public ForwardIndexCreator newForwardIndexCreator(IndexCreationContext.Forward context)
       throws Exception {
-    if (!context.hasDictionary()) {
+    if (!context.hasDictionary() || context.hasDictionaryWithCompression()) {
       boolean deriveNumDocsPerChunk =
           shouldDeriveNumDocsPerChunk(context.getFieldSpec().getName(), context.getColumnProperties());
       int writerVersion = getRawIndexWriterVersion(context.getFieldSpec().getName(), context.getColumnProperties());

@@ -39,6 +39,7 @@ import org.apache.pinot.segment.local.segment.index.converter.SegmentV1V2ToV3For
 import org.apache.pinot.segment.local.segment.index.loader.columnminmaxvalue.ColumnMinMaxValueGeneratorMode;
 import org.apache.pinot.segment.spi.ColumnMetadata;
 import org.apache.pinot.segment.spi.V1Constants;
+import org.apache.pinot.segment.spi.compression.ChunkCompressionType;
 import org.apache.pinot.segment.spi.creator.SegmentGeneratorConfig;
 import org.apache.pinot.segment.spi.creator.SegmentIndexCreationDriver;
 import org.apache.pinot.segment.spi.creator.SegmentVersion;
@@ -93,6 +94,10 @@ public class SegmentPreProcessorTest {
   // For create fst index tests
   private static final String NEWLY_ADDED_FST_COL_DICT = "newFSTColDict";
 
+  // For create dictionary with compression column tests
+  private static final String NEWLY_ADDED_DICTIONARY_WITH_COMPRESSION_COL_SV = "newDictWithCompressionColumnSV";
+  private static final String NEWLY_ADDED_DICTIONARY_WITH_COMPRESSION_COL_MV = "newDictWithCompressionColumnMV";
+
   // For update default value tests.
   private static final String NEW_COLUMNS_SCHEMA1 = "data/newColumnsSchema1.json";
   private static final String NEW_COLUMNS_SCHEMA2 = "data/newColumnsSchema2.json";
@@ -100,6 +105,8 @@ public class SegmentPreProcessorTest {
   private static final String NEW_COLUMNS_SCHEMA_WITH_FST = "data/newColumnsSchemaWithFST.json";
   private static final String NEW_COLUMNS_SCHEMA_WITH_TEXT = "data/newColumnsSchemaWithText.json";
   private static final String NEW_COLUMNS_SCHEMA_WITH_H3_JSON = "data/newColumnsSchemaWithH3Json.json";
+  private static final String NEW_COLUMNS_SCHEMA_WITH_DICTIONARY_WITH_COMPRESSION =
+      "data/newColumnsSchemaWithDictWithCompression.json";
   private static final String NEW_INT_METRIC_COLUMN_NAME = "newIntMetric";
   private static final String NEW_LONG_METRIC_COLUMN_NAME = "newLongMetric";
   private static final String NEW_FLOAT_METRIC_COLUMN_NAME = "newFloatMetric";
@@ -122,6 +129,7 @@ public class SegmentPreProcessorTest {
   private Schema _newColumnsSchemaWithFST;
   private Schema _newColumnsSchemaWithText;
   private Schema _newColumnsSchemaWithH3Json;
+  private Schema _newColumnsSchemaWithDictionaryWithCompression;
 
   @BeforeMethod
   public void setUp()
@@ -169,6 +177,9 @@ public class SegmentPreProcessorTest {
     resourceUrl = classLoader.getResource(NEW_COLUMNS_SCHEMA_WITH_H3_JSON);
     assertNotNull(resourceUrl);
     _newColumnsSchemaWithH3Json = Schema.fromFile(new File(resourceUrl.getFile()));
+    resourceUrl = classLoader.getResource(NEW_COLUMNS_SCHEMA_WITH_DICTIONARY_WITH_COMPRESSION);
+    assertNotNull(resourceUrl);
+    _newColumnsSchemaWithDictionaryWithCompression = Schema.fromFile(new File(resourceUrl.getFile()));
   }
 
   @AfterMethod
@@ -394,18 +405,158 @@ public class SegmentPreProcessorTest {
     checkTextIndexCreation(EXISTING_STRING_COL_DICT, 9, 4, _schema, false, true, false, 26);
   }
 
+  /**
+   * Test to check the behavior of the dictionary with compression feature
+   * when enabled on a new SV column
+   */
+  @Test
+  public void testEnableDictionaryWithCompressionOnNewColumnsSV()
+      throws Exception {
+    Map<String, ChunkCompressionType> dictionaryWithCompressionColumns = new HashMap<>();
+    dictionaryWithCompressionColumns.put(NEWLY_ADDED_DICTIONARY_WITH_COMPRESSION_COL_SV, ChunkCompressionType.LZ4);
+    _indexLoadingConfig.setDictionaryCompressionForwardIndexCompressionType(dictionaryWithCompressionColumns);
+
+    // Create a segment in V3, add two new columns with dictionary with compression enabled
+    constructV3Segment();
+    SegmentMetadataImpl segmentMetadata = new SegmentMetadataImpl(_indexDir);
+    ColumnMetadata columnMetadata = segmentMetadata.getColumnMetadataFor(
+        NEWLY_ADDED_DICTIONARY_WITH_COMPRESSION_COL_SV);
+    // should be null since column does not exist in the schema
+    assertNull(columnMetadata);
+
+    // On adding a new column, the dictionary with compression flag should not get set even though dictionary with
+    // compression has been enabled. The reason for this is that the column will be created in the dictionary encoded
+    // format to save space since all the values are the default values for the given column.
+    checkIndexCreation(ColumnIndexType.FORWARD_INDEX, NEWLY_ADDED_DICTIONARY_WITH_COMPRESSION_COL_SV, 1, 1,
+        _newColumnsSchemaWithDictionaryWithCompression, true, true, true, 4, true, 0, false);
+
+    // Create a segment in V1, add two new columns with dictionary with compression enabled
+    constructV1Segment();
+    segmentMetadata = new SegmentMetadataImpl(_indexDir);
+    columnMetadata = segmentMetadata.getColumnMetadataFor(NEWLY_ADDED_DICTIONARY_WITH_COMPRESSION_COL_SV);
+    // should be null since column does not exist in the schema
+    assertNull(columnMetadata);
+
+    // On adding a new column, the dictionary with compression flag should not get set even though dictionary with
+    // compression has been enabled. The reason for this is that the column will be created in the dictionary encoded
+    // format to save space since all the values are the default values for the given column.
+    checkIndexCreation(ColumnIndexType.FORWARD_INDEX, NEWLY_ADDED_DICTIONARY_WITH_COMPRESSION_COL_SV, 1, 1,
+        _newColumnsSchemaWithDictionaryWithCompression, true, true, true, 4, true, 0, false);
+  }
+
+  /**
+   * Test to check the behavior of the dictionary with compression feature
+   * when enabled on a new MV column
+   */
+  @Test
+  public void testEnableDictionaryWithCompressionOnNewColumnsMV()
+      throws Exception {
+    Map<String, ChunkCompressionType> dictionaryWithCompressionColumns = new HashMap<>();
+    dictionaryWithCompressionColumns.put(NEWLY_ADDED_DICTIONARY_WITH_COMPRESSION_COL_MV, ChunkCompressionType.LZ4);
+    _indexLoadingConfig.setDictionaryCompressionForwardIndexCompressionType(dictionaryWithCompressionColumns);
+
+    // Create a segment in V3, add two new columns with dictionary with compression enabled
+    constructV3Segment();
+    SegmentMetadataImpl segmentMetadata = new SegmentMetadataImpl(_indexDir);
+    ColumnMetadata columnMetadata = segmentMetadata.getColumnMetadataFor(
+        NEWLY_ADDED_DICTIONARY_WITH_COMPRESSION_COL_MV);
+    // should be null since column does not exist in the schema
+    assertNull(columnMetadata);
+
+    // On adding a new column, the dictionary with compression flag should not get set even though dictionary with
+    // compression has been enabled. The reason for this is that the column will be created in the dictionary encoded
+    // format to save space since all the values are the default values for the given column.
+    checkIndexCreation(ColumnIndexType.FORWARD_INDEX, NEWLY_ADDED_DICTIONARY_WITH_COMPRESSION_COL_MV, 1, 1,
+        _newColumnsSchemaWithDictionaryWithCompression, true, true, false, 4, false, 1, false);
+
+    // Create a segment in V1, add two new columns with dictionary with compression enabled
+    constructV1Segment();
+    segmentMetadata = new SegmentMetadataImpl(_indexDir);
+    columnMetadata = segmentMetadata.getColumnMetadataFor(NEWLY_ADDED_DICTIONARY_WITH_COMPRESSION_COL_MV);
+    // should be null since column does not exist in the schema
+    assertNull(columnMetadata);
+
+    // On adding a new column, the dictionary with compression flag should not get set even though dictionary with
+    // compression has been enabled. The reason for this is that the column will be created in the dictionary encoded
+    // format to save space since all the values are the default values for the given column.
+    checkIndexCreation(ColumnIndexType.FORWARD_INDEX, NEWLY_ADDED_DICTIONARY_WITH_COMPRESSION_COL_MV, 1, 1,
+        _newColumnsSchemaWithDictionaryWithCompression, true, true, false, 4, false, 1, false);
+  }
+
+  /**
+   * Test to check the behavior of the dictionary with compression feature
+   * when enabled on an existing dictionary encoded column
+   */
+  @Test
+  public void testEnableDictionaryWithCompressionOnExistingColumnDictEncoded()
+      throws Exception {
+    Map<String, ChunkCompressionType> dictionaryWithCompressionColumns = new HashMap<>();
+    dictionaryWithCompressionColumns.put(EXISTING_STRING_COL_DICT, ChunkCompressionType.LZ4);
+    _indexLoadingConfig.setDictionaryCompressionForwardIndexCompressionType(dictionaryWithCompressionColumns);
+
+    constructV3Segment();
+    SegmentMetadataImpl segmentMetadata = new SegmentMetadataImpl(_indexDir);
+    ColumnMetadata columnMetadata = segmentMetadata.getColumnMetadataFor(EXISTING_STRING_COL_DICT);
+    assertNotNull(columnMetadata);
+
+    SegmentDirectory segmentDirectory = SegmentDirectoryLoaderRegistry.getDefaultSegmentDirectoryLoader()
+        .load(_indexDir.toURI(),
+            new SegmentDirectoryLoaderContext.Builder().setSegmentDirectoryConfigs(_configuration).build());
+    SegmentPreProcessor v3Processor =
+        new SegmentPreProcessor(segmentDirectory, _indexLoadingConfig, _newColumnsSchemaWithDictionaryWithCompression);
+    expectThrows(RuntimeException.class, v3Processor::process);
+
+    constructV1Segment();
+    segmentDirectory = SegmentDirectoryLoaderRegistry.getDefaultSegmentDirectoryLoader().load(_indexDir.toURI(),
+        new SegmentDirectoryLoaderContext.Builder().setSegmentDirectoryConfigs(_configuration).build());
+    SegmentPreProcessor v1Processor =
+        new SegmentPreProcessor(segmentDirectory, _indexLoadingConfig, _newColumnsSchemaWithDictionaryWithCompression);
+    expectThrows(RuntimeException.class, v1Processor::process);
+  }
+
+  /**
+   * Test to check the behavior of the dictionary with compression feature
+   * when enabled on an existing raw column
+   */
+  @Test
+  public void testEnableDictionaryWithCompressionOnExistingColumnRaw()
+      throws Exception {
+    Map<String, ChunkCompressionType> dictionaryWithCompressionColumns = new HashMap<>();
+    dictionaryWithCompressionColumns.put(EXISTING_STRING_COL_RAW, ChunkCompressionType.LZ4);
+    _indexLoadingConfig.setDictionaryCompressionForwardIndexCompressionType(dictionaryWithCompressionColumns);
+
+    constructV3Segment();
+    SegmentMetadataImpl segmentMetadata = new SegmentMetadataImpl(_indexDir);
+    ColumnMetadata columnMetadata = segmentMetadata.getColumnMetadataFor(EXISTING_STRING_COL_RAW);
+    assertNotNull(columnMetadata);
+
+    SegmentDirectory segmentDirectory = SegmentDirectoryLoaderRegistry.getDefaultSegmentDirectoryLoader()
+        .load(_indexDir.toURI(),
+            new SegmentDirectoryLoaderContext.Builder().setSegmentDirectoryConfigs(_configuration).build());
+    SegmentPreProcessor v3Processor =
+        new SegmentPreProcessor(segmentDirectory, _indexLoadingConfig, _newColumnsSchemaWithDictionaryWithCompression);
+    expectThrows(RuntimeException.class, v3Processor::process);
+
+    constructV1Segment();
+    segmentDirectory = SegmentDirectoryLoaderRegistry.getDefaultSegmentDirectoryLoader().load(_indexDir.toURI(),
+        new SegmentDirectoryLoaderContext.Builder().setSegmentDirectoryConfigs(_configuration).build());
+    SegmentPreProcessor v1Processor =
+        new SegmentPreProcessor(segmentDirectory, _indexLoadingConfig, _newColumnsSchemaWithDictionaryWithCompression);
+    expectThrows(RuntimeException.class, v1Processor::process);
+  }
+
   private void checkFSTIndexCreation(String column, int cardinality, int bits, Schema schema, boolean isAutoGenerated,
       boolean isSorted, int dictionaryElementSize)
       throws Exception {
     checkIndexCreation(ColumnIndexType.FST_INDEX, column, cardinality, bits, schema, isAutoGenerated, true, isSorted,
-        dictionaryElementSize, true, 0);
+        dictionaryElementSize, true, 0, false);
   }
 
   private void checkTextIndexCreation(String column, int cardinality, int bits, Schema schema, boolean isAutoGenerated,
       boolean hasDictionary, boolean isSorted, int dictionaryElementSize)
       throws Exception {
     checkIndexCreation(ColumnIndexType.TEXT_INDEX, column, cardinality, bits, schema, isAutoGenerated, hasDictionary,
-        isSorted, dictionaryElementSize, true, 0);
+        isSorted, dictionaryElementSize, true, 0, false);
   }
 
   private void checkTextIndexCreation(String column, int cardinality, int bits, Schema schema, boolean isAutoGenerated,
@@ -413,12 +564,12 @@ public class SegmentPreProcessorTest {
       int maxNumberOfMultiValues)
       throws Exception {
     checkIndexCreation(ColumnIndexType.TEXT_INDEX, column, cardinality, bits, schema, isAutoGenerated, hasDictionary,
-        isSorted, dictionaryElementSize, isSingleValue, maxNumberOfMultiValues);
+        isSorted, dictionaryElementSize, isSingleValue, maxNumberOfMultiValues, false);
   }
 
   private void checkIndexCreation(ColumnIndexType indexType, String column, int cardinality, int bits, Schema schema,
       boolean isAutoGenerated, boolean hasDictionary, boolean isSorted, int dictionaryElementSize,
-      boolean isSingleValued, int maxNumberOfMultiValues)
+      boolean isSingleValued, int maxNumberOfMultiValues, boolean hasDictionaryWithCompression)
       throws Exception {
 
     try (SegmentDirectory segmentDirectory = SegmentDirectoryLoaderRegistry.getDefaultSegmentDirectoryLoader()
@@ -435,6 +586,7 @@ public class SegmentPreProcessorTest {
       assertEquals(columnMetadata.getColumnMaxLength(), dictionaryElementSize);
       assertEquals(columnMetadata.isSorted(), isSorted);
       assertEquals(columnMetadata.hasDictionary(), hasDictionary);
+      assertEquals(columnMetadata.hasDictionaryWithCompression(), hasDictionaryWithCompression);
       assertEquals(columnMetadata.getMaxNumberOfMultiValues(), maxNumberOfMultiValues);
       assertEquals(columnMetadata.getTotalNumberOfEntries(), 100000);
       assertEquals(columnMetadata.isAutoGenerated(), isAutoGenerated);

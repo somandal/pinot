@@ -99,4 +99,9 @@ public interface DataSource {
    */
   @Nullable
   NullValueVectorReader getNullValueVector();
+
+  /**
+   * Returns true if dictionary with compression is enabled, false otherwise
+   */
+  boolean hasDictionaryWithCompression();
 }

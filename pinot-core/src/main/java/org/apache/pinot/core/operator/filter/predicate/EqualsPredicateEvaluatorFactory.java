@@ -20,6 +20,7 @@ package org.apache.pinot.core.operator.filter.predicate;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
+import javax.annotation.Nullable;
 import org.apache.pinot.common.request.context.predicate.EqPredicate;
 import org.apache.pinot.segment.spi.index.reader.Dictionary;
 import org.apache.pinot.spi.data.FieldSpec.DataType;
@@ -53,30 +54,41 @@ public class EqualsPredicateEvaluatorFactory {
    *
    * @param eqPredicate EQ predicate to evaluate
    * @param dataType Data type for the column
+   * @param hasDictionaryWithCompression whether dictionary with compression is enabled
+   * @param dictionary for the column
    * @return Raw value based EQ predicate evaluator
    */
   public static BaseRawValueBasedPredicateEvaluator newRawValueBasedEvaluator(EqPredicate eqPredicate,
-      DataType dataType) {
+      DataType dataType, boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
     String value = eqPredicate.getValue();
     switch (dataType) {
       case INT:
-        return new IntRawValueBasedEqPredicateEvaluator(eqPredicate, Integer.parseInt(value));
+        return new IntRawValueBasedEqPredicateEvaluator(eqPredicate, Integer.parseInt(value),
+            hasDictionaryWithCompression, dictionary);
       case LONG:
-        return new LongRawValueBasedEqPredicateEvaluator(eqPredicate, Long.parseLong(value));
+        return new LongRawValueBasedEqPredicateEvaluator(eqPredicate, Long.parseLong(value),
+            hasDictionaryWithCompression, dictionary);
       case FLOAT:
-        return new FloatRawValueBasedEqPredicateEvaluator(eqPredicate, Float.parseFloat(value));
+        return new FloatRawValueBasedEqPredicateEvaluator(eqPredicate, Float.parseFloat(value),
+            hasDictionaryWithCompression, dictionary);
       case DOUBLE:
-        return new DoubleRawValueBasedEqPredicateEvaluator(eqPredicate, Double.parseDouble(value));
+        return new DoubleRawValueBasedEqPredicateEvaluator(eqPredicate, Double.parseDouble(value),
+            hasDictionaryWithCompression, dictionary);
       case BIG_DECIMAL:
-        return new BigDecimalRawValueBasedEqPredicateEvaluator(eqPredicate, new BigDecimal(value));
+        return new BigDecimalRawValueBasedEqPredicateEvaluator(eqPredicate, new BigDecimal(value),
+            hasDictionaryWithCompression, dictionary);
       case BOOLEAN:
-        return new IntRawValueBasedEqPredicateEvaluator(eqPredicate, BooleanUtils.toInt(value));
+        return new IntRawValueBasedEqPredicateEvaluator(eqPredicate, BooleanUtils.toInt(value),
+            hasDictionaryWithCompression, dictionary);
       case TIMESTAMP:
-        return new LongRawValueBasedEqPredicateEvaluator(eqPredicate, TimestampUtils.toMillisSinceEpoch(value));
+        return new LongRawValueBasedEqPredicateEvaluator(eqPredicate, TimestampUtils.toMillisSinceEpoch(value),
+            hasDictionaryWithCompression, dictionary);
       case STRING:
-        return new StringRawValueBasedEqPredicateEvaluator(eqPredicate, value);
+        return new StringRawValueBasedEqPredicateEvaluator(eqPredicate, value, hasDictionaryWithCompression,
+            dictionary);
       case BYTES:
-        return new BytesRawValueBasedEqPredicateEvaluator(eqPredicate, BytesUtils.toBytes(value));
+        return new BytesRawValueBasedEqPredicateEvaluator(eqPredicate, BytesUtils.toBytes(value),
+            hasDictionaryWithCompression, dictionary);
       default:
         throw new IllegalStateException("Unsupported data type: " + dataType);
     }
@@ -128,9 +140,22 @@ public class EqualsPredicateEvaluatorFactory {
   private static final class IntRawValueBasedEqPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final int _matchingValue;
 
-    IntRawValueBasedEqPredicateEvaluator(EqPredicate eqPredicate, int matchingValue) {
+    IntRawValueBasedEqPredicateEvaluator(EqPredicate eqPredicate, int matchingValue,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(eqPredicate);
       _matchingValue = matchingValue;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String predicateValue = PredicateUtils.getStoredValue(eqPredicate.getValue(), DataType.INT);
+        int matchingDictId = dictionary.indexOf(predicateValue);
+        if (matchingDictId >= 0) {
+          if (dictionary.length() == 1) {
+            _alwaysTrue = true;
+          }
+        } else {
+          _alwaysFalse = true;
+        }
+      }
     }
 
     @Override
@@ -160,9 +185,22 @@ public class EqualsPredicateEvaluatorFactory {
   private static final class LongRawValueBasedEqPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final long _matchingValue;
 
-    LongRawValueBasedEqPredicateEvaluator(EqPredicate eqPredicate, long matchingValue) {
+    LongRawValueBasedEqPredicateEvaluator(EqPredicate eqPredicate, long matchingValue,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(eqPredicate);
       _matchingValue = matchingValue;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String predicateValue = PredicateUtils.getStoredValue(eqPredicate.getValue(), DataType.LONG);
+        int matchingDictId = dictionary.indexOf(predicateValue);
+        if (matchingDictId >= 0) {
+          if (dictionary.length() == 1) {
+            _alwaysTrue = true;
+          }
+        } else {
+          _alwaysFalse = true;
+        }
+      }
     }
 
     @Override
@@ -192,9 +230,22 @@ public class EqualsPredicateEvaluatorFactory {
   private static final class FloatRawValueBasedEqPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final float _matchingValue;
 
-    FloatRawValueBasedEqPredicateEvaluator(EqPredicate eqPredicate, float matchingValue) {
+    FloatRawValueBasedEqPredicateEvaluator(EqPredicate eqPredicate, float matchingValue,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(eqPredicate);
       _matchingValue = matchingValue;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String predicateValue = PredicateUtils.getStoredValue(eqPredicate.getValue(), DataType.FLOAT);
+        int matchingDictId = dictionary.indexOf(predicateValue);
+        if (matchingDictId >= 0) {
+          if (dictionary.length() == 1) {
+            _alwaysTrue = true;
+          }
+        } else {
+          _alwaysFalse = true;
+        }
+      }
     }
 
     @Override
@@ -224,9 +275,22 @@ public class EqualsPredicateEvaluatorFactory {
   private static final class DoubleRawValueBasedEqPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final double _matchingValue;
 
-    DoubleRawValueBasedEqPredicateEvaluator(EqPredicate eqPredicate, double matchingValue) {
+    DoubleRawValueBasedEqPredicateEvaluator(EqPredicate eqPredicate, double matchingValue,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(eqPredicate);
       _matchingValue = matchingValue;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String predicateValue = PredicateUtils.getStoredValue(eqPredicate.getValue(), DataType.DOUBLE);
+        int matchingDictId = dictionary.indexOf(predicateValue);
+        if (matchingDictId >= 0) {
+          if (dictionary.length() == 1) {
+            _alwaysTrue = true;
+          }
+        } else {
+          _alwaysFalse = true;
+        }
+      }
     }
 
     @Override
@@ -256,9 +320,22 @@ public class EqualsPredicateEvaluatorFactory {
   private static final class BigDecimalRawValueBasedEqPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final BigDecimal _matchingValue;
 
-    BigDecimalRawValueBasedEqPredicateEvaluator(EqPredicate eqPredicate, BigDecimal matchingValue) {
+    BigDecimalRawValueBasedEqPredicateEvaluator(EqPredicate eqPredicate, BigDecimal matchingValue,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(eqPredicate);
       _matchingValue = matchingValue;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String predicateValue = PredicateUtils.getStoredValue(eqPredicate.getValue(), DataType.BIG_DECIMAL);
+        int matchingDictId = dictionary.indexOf(predicateValue);
+        if (matchingDictId >= 0) {
+          if (dictionary.length() == 1) {
+            _alwaysTrue = true;
+          }
+        } else {
+          _alwaysFalse = true;
+        }
+      }
     }
 
     @Override
@@ -275,9 +352,22 @@ public class EqualsPredicateEvaluatorFactory {
   private static final class StringRawValueBasedEqPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final String _matchingValue;
 
-    StringRawValueBasedEqPredicateEvaluator(EqPredicate eqPredicate, String matchingValue) {
+    StringRawValueBasedEqPredicateEvaluator(EqPredicate eqPredicate, String matchingValue,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(eqPredicate);
       _matchingValue = matchingValue;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String predicateValue = PredicateUtils.getStoredValue(eqPredicate.getValue(), DataType.STRING);
+        int matchingDictId = dictionary.indexOf(predicateValue);
+        if (matchingDictId >= 0) {
+          if (dictionary.length() == 1) {
+            _alwaysTrue = true;
+          }
+        } else {
+          _alwaysFalse = true;
+        }
+      }
     }
 
     @Override
@@ -294,9 +384,22 @@ public class EqualsPredicateEvaluatorFactory {
   private static final class BytesRawValueBasedEqPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final byte[] _matchingValue;
 
-    BytesRawValueBasedEqPredicateEvaluator(EqPredicate eqPredicate, byte[] matchingValue) {
+    BytesRawValueBasedEqPredicateEvaluator(EqPredicate eqPredicate, byte[] matchingValue,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(eqPredicate);
       _matchingValue = matchingValue;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String predicateValue = PredicateUtils.getStoredValue(eqPredicate.getValue(), DataType.BYTES);
+        int matchingDictId = dictionary.indexOf(predicateValue);
+        if (matchingDictId >= 0) {
+          if (dictionary.length() == 1) {
+            _alwaysTrue = true;
+          }
+        } else {
+          _alwaysFalse = true;
+        }
+      }
     }
 
     @Override

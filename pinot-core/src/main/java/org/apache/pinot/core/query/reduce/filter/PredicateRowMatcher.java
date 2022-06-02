@@ -37,7 +37,7 @@ public class PredicateRowMatcher implements RowMatcher {
   public PredicateRowMatcher(Predicate predicate, ValueExtractor valueExtractor) {
     _valueExtractor = valueExtractor;
     _valueType = _valueExtractor.getColumnDataType().toDataType();
-    _predicateEvaluator = PredicateEvaluatorProvider.getPredicateEvaluator(predicate, null, _valueType);
+    _predicateEvaluator = PredicateEvaluatorProvider.getPredicateEvaluator(predicate, null, _valueType, false);
   }
 
   @Override

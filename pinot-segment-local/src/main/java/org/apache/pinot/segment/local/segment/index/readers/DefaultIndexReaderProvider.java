@@ -78,7 +78,7 @@ public class DefaultIndexReaderProvider implements IndexReaderProvider {
   @Override
   public ForwardIndexReader<?> newForwardIndexReader(PinotDataBuffer dataBuffer, ColumnMetadata columnMetadata)
       throws IOException {
-    if (columnMetadata.hasDictionary()) {
+    if (columnMetadata.hasDictionary() && !columnMetadata.hasDictionaryWithCompression()) {
       if (columnMetadata.isSingleValue()) {
         if (columnMetadata.isSorted()) {
           return new SortedIndexReaderImpl(dataBuffer, columnMetadata.getCardinality());

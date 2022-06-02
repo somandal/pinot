@@ -1404,7 +1404,7 @@ public class DistinctCountThetaSketchAggregationFunction
       DataType valueType = valueTypes[_expressionIndex];
       Object valueArray = valueArrays[_expressionIndex];
       if (_predicateEvaluator == null) {
-        _predicateEvaluator = PredicateEvaluatorProvider.getPredicateEvaluator(_predicate, null, valueType);
+        _predicateEvaluator = PredicateEvaluatorProvider.getPredicateEvaluator(_predicate, null, valueType, false);
       }
       if (singleValue) {
         switch (valueType) {

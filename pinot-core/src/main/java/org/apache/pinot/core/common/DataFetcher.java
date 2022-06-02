@@ -67,7 +67,8 @@ public class DataFetcher {
       String column = entry.getKey();
       DataSource dataSource = entry.getValue();
       ColumnValueReader columnValueReader =
-          new ColumnValueReader(dataSource.getForwardIndex(), dataSource.getDictionary());
+          new ColumnValueReader(dataSource.getForwardIndex(), dataSource.getDictionary(),
+              dataSource.hasDictionaryWithCompression());
       _columnValueReaderMap.put(column, columnValueReader);
       DataSourceMetadata dataSourceMetadata = dataSource.getDataSourceMetadata();
       if (!dataSourceMetadata.isSingleValue()) {
@@ -429,15 +430,18 @@ public class DataFetcher {
     final Dictionary _dictionary;
     final FieldSpec.DataType _dataType;
     final boolean _singleValue;
+    final boolean _hasDictionaryWithCompression;
 
     boolean _readerContextCreated;
     ForwardIndexReaderContext _readerContext;
 
-    ColumnValueReader(ForwardIndexReader reader, @Nullable Dictionary dictionary) {
+    ColumnValueReader(ForwardIndexReader reader, @Nullable Dictionary dictionary,
+        boolean hasDictionaryWithCompression) {
       _reader = reader;
       _dictionary = dictionary;
       _dataType = reader.getStoredType();
       _singleValue = reader.isSingleValue();
+      _hasDictionaryWithCompression = hasDictionaryWithCompression;
     }
 
     private ForwardIndexReaderContext getReaderContext() {
@@ -457,7 +461,7 @@ public class DataFetcher {
     void readIntValues(int[] docIds, int length, int[] valueBuffer) {
       Tracing.activeRecording().setInputDataType(_dataType, _singleValue);
       ForwardIndexReaderContext readerContext = getReaderContext();
-      if (_dictionary != null) {
+      if (_dictionary != null && !_hasDictionaryWithCompression) {
         int[] dictIdBuffer = THREAD_LOCAL_DICT_IDS.get();
         _reader.readDictIds(docIds, length, dictIdBuffer, readerContext);
         _dictionary.readIntValues(dictIdBuffer, length, valueBuffer);
@@ -475,7 +479,7 @@ public class DataFetcher {
     void readLongValues(int[] docIds, int length, long[] valueBuffer) {
       Tracing.activeRecording().setInputDataType(_dataType, _singleValue);
       ForwardIndexReaderContext readerContext = getReaderContext();
-      if (_dictionary != null) {
+      if (_dictionary != null && !_hasDictionaryWithCompression) {
         int[] dictIdBuffer = THREAD_LOCAL_DICT_IDS.get();
         _reader.readDictIds(docIds, length, dictIdBuffer, readerContext);
         _dictionary.readLongValues(dictIdBuffer, length, valueBuffer);
@@ -493,7 +497,7 @@ public class DataFetcher {
     void readFloatValues(int[] docIds, int length, float[] valueBuffer) {
       Tracing.activeRecording().setInputDataType(_dataType, _singleValue);
       ForwardIndexReaderContext readerContext = getReaderContext();
-      if (_dictionary != null) {
+      if (_dictionary != null && !_hasDictionaryWithCompression) {
         int[] dictIdBuffer = THREAD_LOCAL_DICT_IDS.get();
         _reader.readDictIds(docIds, length, dictIdBuffer, readerContext);
         _dictionary.readFloatValues(dictIdBuffer, length, valueBuffer);
@@ -511,7 +515,7 @@ public class DataFetcher {
     void readDoubleValues(int[] docIds, int length, double[] valueBuffer) {
       Tracing.activeRecording().setInputDataType(_dataType, _singleValue);
       ForwardIndexReaderContext readerContext = getReaderContext();
-      if (_dictionary != null) {
+      if (_dictionary != null && !_hasDictionaryWithCompression) {
         int[] dictIdBuffer = THREAD_LOCAL_DICT_IDS.get();
         _reader.readDictIds(docIds, length, dictIdBuffer, readerContext);
         _dictionary.readDoubleValues(dictIdBuffer, length, valueBuffer);
@@ -529,7 +533,7 @@ public class DataFetcher {
     void readBigDecimalValues(int[] docIds, int length, BigDecimal[] valueBuffer) {
       Tracing.activeRecording().setInputDataType(_dataType, _singleValue);
       ForwardIndexReaderContext readerContext = getReaderContext();
-      if (_dictionary != null) {
+      if (_dictionary != null && !_hasDictionaryWithCompression) {
         int[] dictIdBuffer = THREAD_LOCAL_DICT_IDS.get();
         _reader.readDictIds(docIds, length, dictIdBuffer, readerContext);
         _dictionary.readBigDecimalValues(dictIdBuffer, length, valueBuffer);
@@ -547,7 +551,7 @@ public class DataFetcher {
     void readStringValues(int[] docIds, int length, String[] valueBuffer) {
       Tracing.activeRecording().setInputDataType(_dataType, _singleValue);
       ForwardIndexReaderContext readerContext = getReaderContext();
-      if (_dictionary != null) {
+      if (_dictionary != null && !_hasDictionaryWithCompression) {
         int[] dictIdBuffer = THREAD_LOCAL_DICT_IDS.get();
         _reader.readDictIds(docIds, length, dictIdBuffer, readerContext);
         _dictionary.readStringValues(dictIdBuffer, length, valueBuffer);
@@ -598,7 +602,7 @@ public class DataFetcher {
     void readBytesValues(int[] docIds, int length, byte[][] valueBuffer) {
       Tracing.activeRecording().setInputDataType(_dataType, _singleValue);
       ForwardIndexReaderContext readerContext = getReaderContext();
-      if (_dictionary != null) {
+      if (_dictionary != null && !_hasDictionaryWithCompression) {
         int[] dictIdBuffer = THREAD_LOCAL_DICT_IDS.get();
         _reader.readDictIds(docIds, length, dictIdBuffer, readerContext);
         _dictionary.readBytesValues(dictIdBuffer, length, valueBuffer);
@@ -630,7 +634,7 @@ public class DataFetcher {
 
     void readIntValuesMV(int[] docIds, int length, int[][] valuesBuffer) {
       Tracing.activeRecording().setInputDataType(_dataType, _singleValue);
-      if (_dictionary != null) {
+      if (_dictionary != null && !_hasDictionaryWithCompression) {
         for (int i = 0; i < length; i++) {
           int numValues = _reader.getDictIdMV(docIds[i], _reusableMVDictIds, getReaderContext());
           int[] values = new int[numValues];
@@ -650,7 +654,7 @@ public class DataFetcher {
 
     void readLongValuesMV(int[] docIds, int length, long[][] valuesBuffer) {
       Tracing.activeRecording().setInputDataType(_dataType, _singleValue);
-      if (_dictionary != null) {
+      if (_dictionary != null && !_hasDictionaryWithCompression) {
         for (int i = 0; i < length; i++) {
           int numValues = _reader.getDictIdMV(docIds[i], _reusableMVDictIds, getReaderContext());
           long[] values = new long[numValues];
@@ -670,7 +674,7 @@ public class DataFetcher {
 
     void readFloatValuesMV(int[] docIds, int length, float[][] valuesBuffer) {
       Tracing.activeRecording().setInputDataType(_dataType, _singleValue);
-      if (_dictionary != null) {
+      if (_dictionary != null && !_hasDictionaryWithCompression) {
         for (int i = 0; i < length; i++) {
           int numValues = _reader.getDictIdMV(docIds[i], _reusableMVDictIds, getReaderContext());
           float[] values = new float[numValues];
@@ -690,7 +694,7 @@ public class DataFetcher {
 
     void readDoubleValuesMV(int[] docIds, int length, double[][] valuesBuffer) {
       Tracing.activeRecording().setInputDataType(_dataType, _singleValue);
-      if (_dictionary != null) {
+      if (_dictionary != null && !_hasDictionaryWithCompression) {
         for (int i = 0; i < length; i++) {
           int numValues = _reader.getDictIdMV(docIds[i], _reusableMVDictIds, getReaderContext());
           double[] values = new double[numValues];
@@ -710,7 +714,7 @@ public class DataFetcher {
 
     void readStringValuesMV(int[] docIds, int length, String[][] valuesBuffer) {
       Tracing.activeRecording().setInputDataType(_dataType, _singleValue);
-      if (_dictionary != null) {
+      if (_dictionary != null && !_hasDictionaryWithCompression) {
         for (int i = 0; i < length; i++) {
           int numValues = _reader.getDictIdMV(docIds[i], _reusableMVDictIds, getReaderContext());
           String[] values = new String[numValues];

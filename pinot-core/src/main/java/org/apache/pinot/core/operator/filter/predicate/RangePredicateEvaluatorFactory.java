@@ -21,6 +21,7 @@ package org.apache.pinot.core.operator.filter.predicate;
 import com.google.common.base.Preconditions;
 import it.unimi.dsi.fastutil.ints.IntSet;
 import java.math.BigDecimal;
+import javax.annotation.Nullable;
 import org.apache.pinot.common.request.context.predicate.RangePredicate;
 import org.apache.pinot.segment.spi.index.reader.Dictionary;
 import org.apache.pinot.spi.data.FieldSpec.DataType;
@@ -34,6 +35,11 @@ import org.apache.pinot.spi.utils.TimestampUtils;
  * Factory for RANGE predicate evaluators.
  */
 public class RangePredicateEvaluatorFactory {
+  // When the cardinality of the column is lower than this threshold, pre-calculate the matching dictionary ids;
+  // otherwise, fetch the value when evaluating each dictionary id.
+  // TODO: Tune this threshold
+  private static final int DICT_ID_SET_BASED_CARDINALITY_THRESHOLD = 1000;
+
   private RangePredicateEvaluatorFactory() {
   }
 
@@ -59,10 +65,12 @@ public class RangePredicateEvaluatorFactory {
    *
    * @param rangePredicate RANGE predicate to evaluate
    * @param dataType Data type for the column
+   * @param hasDictionaryWithCompression whether dictionary with compression is enabled
+   * @param dictionary for the column
    * @return Raw value based RANGE predicate evaluator
    */
   public static BaseRawValueBasedPredicateEvaluator newRawValueBasedEvaluator(RangePredicate rangePredicate,
-      DataType dataType) {
+      DataType dataType, boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
     String lowerBound = rangePredicate.getLowerBound();
     String upperBound = rangePredicate.getUpperBound();
     // NOTE: Handle unbounded as inclusive min/max value of the data type
@@ -74,39 +82,46 @@ public class RangePredicateEvaluatorFactory {
       case INT:
         return new IntRawValueBasedRangePredicateEvaluator(rangePredicate,
             lowerUnbounded ? Integer.MIN_VALUE : Integer.parseInt(lowerBound),
-            upperUnbounded ? Integer.MAX_VALUE : Integer.parseInt(upperBound), lowerInclusive, upperInclusive);
+            upperUnbounded ? Integer.MAX_VALUE : Integer.parseInt(upperBound), lowerInclusive, upperInclusive,
+            hasDictionaryWithCompression, dictionary);
       case LONG:
         return new LongRawValueBasedRangePredicateEvaluator(rangePredicate,
             lowerUnbounded ? Long.MIN_VALUE : Long.parseLong(lowerBound),
-            upperUnbounded ? Long.MAX_VALUE : Long.parseLong(upperBound), lowerInclusive, upperInclusive);
+            upperUnbounded ? Long.MAX_VALUE : Long.parseLong(upperBound), lowerInclusive, upperInclusive,
+            hasDictionaryWithCompression, dictionary);
       case FLOAT:
         return new FloatRawValueBasedRangePredicateEvaluator(rangePredicate,
             lowerUnbounded ? Float.NEGATIVE_INFINITY : Float.parseFloat(lowerBound),
-            upperUnbounded ? Float.POSITIVE_INFINITY : Float.parseFloat(upperBound), lowerInclusive, upperInclusive);
+            upperUnbounded ? Float.POSITIVE_INFINITY : Float.parseFloat(upperBound), lowerInclusive, upperInclusive,
+            hasDictionaryWithCompression, dictionary);
       case DOUBLE:
         return new DoubleRawValueBasedRangePredicateEvaluator(rangePredicate,
             lowerUnbounded ? Double.NEGATIVE_INFINITY : Double.parseDouble(lowerBound),
-            upperUnbounded ? Double.POSITIVE_INFINITY : Double.parseDouble(upperBound), lowerInclusive, upperInclusive);
+            upperUnbounded ? Double.POSITIVE_INFINITY : Double.parseDouble(upperBound), lowerInclusive, upperInclusive,
+            hasDictionaryWithCompression, dictionary);
       case BIG_DECIMAL:
         return new BigDecimalRawValueBasedRangePredicateEvaluator(rangePredicate,
             lowerUnbounded ? null : new BigDecimal(lowerBound), upperUnbounded ? null : new BigDecimal(upperBound),
-            lowerInclusive, upperInclusive);
+            lowerInclusive, upperInclusive, hasDictionaryWithCompression, dictionary);
       case BOOLEAN:
         return new IntRawValueBasedRangePredicateEvaluator(rangePredicate,
             lowerUnbounded ? Integer.MIN_VALUE : BooleanUtils.toInt(lowerBound),
-            upperUnbounded ? Integer.MAX_VALUE : BooleanUtils.toInt(upperBound), lowerInclusive, upperInclusive);
+            upperUnbounded ? Integer.MAX_VALUE : BooleanUtils.toInt(upperBound), lowerInclusive, upperInclusive,
+            hasDictionaryWithCompression, dictionary);
       case TIMESTAMP:
         return new LongRawValueBasedRangePredicateEvaluator(rangePredicate,
             lowerUnbounded ? Long.MIN_VALUE : TimestampUtils.toMillisSinceEpoch(lowerBound),
             upperUnbounded ? Long.MAX_VALUE : TimestampUtils.toMillisSinceEpoch(upperBound), lowerInclusive,
-            upperInclusive);
+            upperInclusive, hasDictionaryWithCompression, dictionary);
       case STRING:
         return new StringRawValueBasedRangePredicateEvaluator(rangePredicate, lowerUnbounded ? null : lowerBound,
-            upperUnbounded ? null : upperBound, lowerInclusive, upperInclusive);
+            upperUnbounded ? null : upperBound, lowerInclusive, upperInclusive, hasDictionaryWithCompression,
+            dictionary);
       case BYTES:
         return new BytesRawValueBasedRangePredicateEvaluator(rangePredicate,
             lowerUnbounded ? null : BytesUtils.toBytes(lowerBound),
-            upperUnbounded ? null : BytesUtils.toBytes(upperBound), lowerInclusive, upperInclusive);
+            upperUnbounded ? null : BytesUtils.toBytes(upperBound), lowerInclusive, upperInclusive,
+            hasDictionaryWithCompression, dictionary);
       default:
         throw new IllegalStateException("Unsupported data type: " + dataType);
     }
@@ -213,11 +228,6 @@ public class RangePredicateEvaluatorFactory {
 
   private static final class UnsortedDictionaryBasedRangePredicateEvaluator
       extends BaseDictionaryBasedPredicateEvaluator {
-    // When the cardinality of the column is lower than this threshold, pre-calculate the matching dictionary ids;
-    // otherwise, fetch the value when evaluating each dictionary id.
-    // TODO: Tune this threshold
-    private static final int DICT_ID_SET_BASED_CARDINALITY_THRESHOLD = 1000;
-
     final Dictionary _dictionary;
     final boolean _dictIdSetBased;
     final IntSet _matchingDictIdSet;
@@ -250,7 +260,9 @@ public class RangePredicateEvaluatorFactory {
       } else {
         _dictIdSetBased = false;
         _matchingDictIdSet = null;
-        _rawValueBasedEvaluator = newRawValueBasedEvaluator(rangePredicate, dataType);
+        // Fallback to raw value based evaluator. No need to pass information about dictionary with compression
+        // as we have already assessed that the cardinality is too high to figure out the alwaysFalse/alwaysTrue clauses
+        _rawValueBasedEvaluator = newRawValueBasedEvaluator(rangePredicate, dataType, false, null);
       }
     }
 
@@ -289,7 +301,8 @@ public class RangePredicateEvaluatorFactory {
     final int _inclusiveUpperBound;
 
     IntRawValueBasedRangePredicateEvaluator(RangePredicate rangePredicate, int lowerBound, int upperBound,
-        boolean lowerInclusive, boolean upperInclusive) {
+        boolean lowerInclusive, boolean upperInclusive, boolean hasDictionaryWithCompression,
+        @Nullable Dictionary dictionary) {
       super(rangePredicate);
       if (lowerInclusive) {
         _inclusiveLowerBound = lowerBound;
@@ -302,6 +315,70 @@ public class RangePredicateEvaluatorFactory {
       } else {
         _inclusiveUpperBound = upperBound - 1;
         Preconditions.checkArgument(_inclusiveUpperBound < upperBound, "Invalid range: %s", rangePredicate);
+      }
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String lowerBoundString = rangePredicate.getLowerBound();
+        String upperBoundString = rangePredicate.getUpperBound();
+        if (dictionary.isSorted()) {
+          int startDictId;
+          if (lowerBoundString.equals(RangePredicate.UNBOUNDED)) {
+            startDictId = 0;
+          } else {
+            int insertionIndex = dictionary.insertionIndexOf(PredicateUtils.getStoredValue(lowerBoundString,
+                DataType.INT));
+            if (insertionIndex < 0) {
+              startDictId = -(insertionIndex + 1);
+            } else {
+              if (lowerInclusive) {
+                startDictId = insertionIndex;
+              } else {
+                startDictId = insertionIndex + 1;
+              }
+            }
+          }
+          int endDictId;
+          if (upperBoundString.equals(RangePredicate.UNBOUNDED)) {
+            endDictId = dictionary.length();
+          } else {
+            int insertionIndex = dictionary.insertionIndexOf(PredicateUtils.getStoredValue(upperBoundString,
+                DataType.INT));
+            if (insertionIndex < 0) {
+              endDictId = -(insertionIndex + 1);
+            } else {
+              if (upperInclusive) {
+                endDictId = insertionIndex + 1;
+              } else {
+                endDictId = insertionIndex;
+              }
+            }
+          }
+
+          int numMatchingDictIds = endDictId - startDictId;
+          if (numMatchingDictIds <= 0) {
+            _alwaysFalse = true;
+          } else if (dictionary.length() == numMatchingDictIds) {
+            _alwaysTrue = true;
+          }
+        } else {
+          int cardinality = dictionary.length();
+          if (cardinality < DICT_ID_SET_BASED_CARDINALITY_THRESHOLD) {
+            if (!lowerBoundString.equals(RangePredicate.UNBOUNDED)) {
+              lowerBoundString = PredicateUtils.getStoredValue(lowerBoundString, DataType.INT);
+            }
+            if (!upperBoundString.equals(RangePredicate.UNBOUNDED)) {
+              upperBoundString = PredicateUtils.getStoredValue(upperBoundString, DataType.INT);
+            }
+            IntSet matchingDictIdSet =
+                dictionary.getDictIdsInRange(lowerBoundString, upperBoundString, lowerInclusive, upperInclusive);
+            int numMatchingDictIds = matchingDictIdSet.size();
+            if (numMatchingDictIds == 0) {
+              _alwaysFalse = true;
+            } else if (numMatchingDictIds == cardinality) {
+              _alwaysTrue = true;
+            }
+          }
+        }
       }
     }
 
@@ -342,7 +419,8 @@ public class RangePredicateEvaluatorFactory {
     final long _inclusiveUpperBound;
 
     LongRawValueBasedRangePredicateEvaluator(RangePredicate rangePredicate, long lowerBound, long upperBound,
-        boolean lowerInclusive, boolean upperInclusive) {
+        boolean lowerInclusive, boolean upperInclusive, boolean hasDictionaryWithCompression,
+        @Nullable Dictionary dictionary) {
       super(rangePredicate);
       if (lowerInclusive) {
         _inclusiveLowerBound = lowerBound;
@@ -355,6 +433,70 @@ public class RangePredicateEvaluatorFactory {
       } else {
         _inclusiveUpperBound = upperBound - 1;
         Preconditions.checkArgument(_inclusiveUpperBound < upperBound, "Invalid range: %s", rangePredicate);
+      }
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String lowerBoundString = rangePredicate.getLowerBound();
+        String upperBoundString = rangePredicate.getUpperBound();
+        if (dictionary.isSorted()) {
+          int startDictId;
+          if (lowerBoundString.equals(RangePredicate.UNBOUNDED)) {
+            startDictId = 0;
+          } else {
+            int insertionIndex = dictionary.insertionIndexOf(PredicateUtils.getStoredValue(lowerBoundString,
+                DataType.LONG));
+            if (insertionIndex < 0) {
+              startDictId = -(insertionIndex + 1);
+            } else {
+              if (lowerInclusive) {
+                startDictId = insertionIndex;
+              } else {
+                startDictId = insertionIndex + 1;
+              }
+            }
+          }
+          int endDictId;
+          if (upperBoundString.equals(RangePredicate.UNBOUNDED)) {
+            endDictId = dictionary.length();
+          } else {
+            int insertionIndex = dictionary.insertionIndexOf(PredicateUtils.getStoredValue(upperBoundString,
+                DataType.LONG));
+            if (insertionIndex < 0) {
+              endDictId = -(insertionIndex + 1);
+            } else {
+              if (upperInclusive) {
+                endDictId = insertionIndex + 1;
+              } else {
+                endDictId = insertionIndex;
+              }
+            }
+          }
+
+          int numMatchingDictIds = endDictId - startDictId;
+          if (numMatchingDictIds <= 0) {
+            _alwaysFalse = true;
+          } else if (dictionary.length() == numMatchingDictIds) {
+            _alwaysTrue = true;
+          }
+        } else {
+          int cardinality = dictionary.length();
+          if (cardinality < DICT_ID_SET_BASED_CARDINALITY_THRESHOLD) {
+            if (!lowerBoundString.equals(RangePredicate.UNBOUNDED)) {
+              lowerBoundString = PredicateUtils.getStoredValue(lowerBoundString, DataType.LONG);
+            }
+            if (!upperBoundString.equals(RangePredicate.UNBOUNDED)) {
+              upperBoundString = PredicateUtils.getStoredValue(upperBoundString, DataType.LONG);
+            }
+            IntSet matchingDictIdSet =
+                dictionary.getDictIdsInRange(lowerBoundString, upperBoundString, lowerInclusive, upperInclusive);
+            int numMatchingDictIds = matchingDictIdSet.size();
+            if (numMatchingDictIds == 0) {
+              _alwaysFalse = true;
+            } else if (numMatchingDictIds == cardinality) {
+              _alwaysTrue = true;
+            }
+          }
+        }
       }
     }
 
@@ -395,7 +537,8 @@ public class RangePredicateEvaluatorFactory {
     final float _inclusiveUpperBound;
 
     FloatRawValueBasedRangePredicateEvaluator(RangePredicate rangePredicate, float lowerBound, float upperBound,
-        boolean lowerInclusive, boolean upperInclusive) {
+        boolean lowerInclusive, boolean upperInclusive, boolean hasDictionaryWithCompression,
+        @Nullable Dictionary dictionary) {
       super(rangePredicate);
       if (lowerInclusive) {
         _inclusiveLowerBound = lowerBound;
@@ -408,6 +551,70 @@ public class RangePredicateEvaluatorFactory {
       } else {
         _inclusiveUpperBound = Math.nextDown(upperBound);
         Preconditions.checkArgument(_inclusiveUpperBound < upperBound, "Invalid range: %s", rangePredicate);
+      }
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String lowerBoundString = rangePredicate.getLowerBound();
+        String upperBoundString = rangePredicate.getUpperBound();
+        if (dictionary.isSorted()) {
+          int startDictId;
+          if (lowerBoundString.equals(RangePredicate.UNBOUNDED)) {
+            startDictId = 0;
+          } else {
+            int insertionIndex = dictionary.insertionIndexOf(PredicateUtils.getStoredValue(lowerBoundString,
+                DataType.FLOAT));
+            if (insertionIndex < 0) {
+              startDictId = -(insertionIndex + 1);
+            } else {
+              if (lowerInclusive) {
+                startDictId = insertionIndex;
+              } else {
+                startDictId = insertionIndex + 1;
+              }
+            }
+          }
+          int endDictId;
+          if (upperBoundString.equals(RangePredicate.UNBOUNDED)) {
+            endDictId = dictionary.length();
+          } else {
+            int insertionIndex = dictionary.insertionIndexOf(PredicateUtils.getStoredValue(upperBoundString,
+                DataType.FLOAT));
+            if (insertionIndex < 0) {
+              endDictId = -(insertionIndex + 1);
+            } else {
+              if (upperInclusive) {
+                endDictId = insertionIndex + 1;
+              } else {
+                endDictId = insertionIndex;
+              }
+            }
+          }
+
+          int numMatchingDictIds = endDictId - startDictId;
+          if (numMatchingDictIds <= 0) {
+            _alwaysFalse = true;
+          } else if (dictionary.length() == numMatchingDictIds) {
+            _alwaysTrue = true;
+          }
+        } else {
+          int cardinality = dictionary.length();
+          if (cardinality < DICT_ID_SET_BASED_CARDINALITY_THRESHOLD) {
+            if (!lowerBoundString.equals(RangePredicate.UNBOUNDED)) {
+              lowerBoundString = PredicateUtils.getStoredValue(lowerBoundString, DataType.FLOAT);
+            }
+            if (!upperBoundString.equals(RangePredicate.UNBOUNDED)) {
+              upperBoundString = PredicateUtils.getStoredValue(upperBoundString, DataType.FLOAT);
+            }
+            IntSet matchingDictIdSet =
+                dictionary.getDictIdsInRange(lowerBoundString, upperBoundString, lowerInclusive, upperInclusive);
+            int numMatchingDictIds = matchingDictIdSet.size();
+            if (numMatchingDictIds == 0) {
+              _alwaysFalse = true;
+            } else if (numMatchingDictIds == cardinality) {
+              _alwaysTrue = true;
+            }
+          }
+        }
       }
     }
 
@@ -448,7 +655,8 @@ public class RangePredicateEvaluatorFactory {
     final double _inclusiveUpperBound;
 
     DoubleRawValueBasedRangePredicateEvaluator(RangePredicate rangePredicate, double lowerBound, double upperBound,
-        boolean lowerInclusive, boolean upperInclusive) {
+        boolean lowerInclusive, boolean upperInclusive, boolean hasDictionaryWithCompression,
+        @Nullable Dictionary dictionary) {
       super(rangePredicate);
       if (lowerInclusive) {
         _inclusiveLowerBound = lowerBound;
@@ -461,6 +669,70 @@ public class RangePredicateEvaluatorFactory {
       } else {
         _inclusiveUpperBound = Math.nextDown(upperBound);
         Preconditions.checkArgument(_inclusiveUpperBound < upperBound, "Invalid range: %s", rangePredicate);
+      }
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String lowerBoundString = rangePredicate.getLowerBound();
+        String upperBoundString = rangePredicate.getUpperBound();
+        if (dictionary.isSorted()) {
+          int startDictId;
+          if (lowerBoundString.equals(RangePredicate.UNBOUNDED)) {
+            startDictId = 0;
+          } else {
+            int insertionIndex = dictionary.insertionIndexOf(PredicateUtils.getStoredValue(lowerBoundString,
+                DataType.DOUBLE));
+            if (insertionIndex < 0) {
+              startDictId = -(insertionIndex + 1);
+            } else {
+              if (lowerInclusive) {
+                startDictId = insertionIndex;
+              } else {
+                startDictId = insertionIndex + 1;
+              }
+            }
+          }
+          int endDictId;
+          if (upperBoundString.equals(RangePredicate.UNBOUNDED)) {
+            endDictId = dictionary.length();
+          } else {
+            int insertionIndex = dictionary.insertionIndexOf(PredicateUtils.getStoredValue(upperBoundString,
+                DataType.DOUBLE));
+            if (insertionIndex < 0) {
+              endDictId = -(insertionIndex + 1);
+            } else {
+              if (upperInclusive) {
+                endDictId = insertionIndex + 1;
+              } else {
+                endDictId = insertionIndex;
+              }
+            }
+          }
+
+          int numMatchingDictIds = endDictId - startDictId;
+          if (numMatchingDictIds <= 0) {
+            _alwaysFalse = true;
+          } else if (dictionary.length() == numMatchingDictIds) {
+            _alwaysTrue = true;
+          }
+        } else {
+          int cardinality = dictionary.length();
+          if (cardinality < DICT_ID_SET_BASED_CARDINALITY_THRESHOLD) {
+            if (!lowerBoundString.equals(RangePredicate.UNBOUNDED)) {
+              lowerBoundString = PredicateUtils.getStoredValue(lowerBoundString, DataType.DOUBLE);
+            }
+            if (!upperBoundString.equals(RangePredicate.UNBOUNDED)) {
+              upperBoundString = PredicateUtils.getStoredValue(upperBoundString, DataType.DOUBLE);
+            }
+            IntSet matchingDictIdSet =
+                dictionary.getDictIdsInRange(lowerBoundString, upperBoundString, lowerInclusive, upperInclusive);
+            int numMatchingDictIds = matchingDictIdSet.size();
+            if (numMatchingDictIds == 0) {
+              _alwaysFalse = true;
+            } else if (numMatchingDictIds == cardinality) {
+              _alwaysTrue = true;
+            }
+          }
+        }
       }
     }
 
@@ -503,12 +775,77 @@ public class RangePredicateEvaluatorFactory {
     final int _upperComparisonValue;
 
     BigDecimalRawValueBasedRangePredicateEvaluator(RangePredicate rangePredicate, BigDecimal lowerBound,
-        BigDecimal upperBound, boolean lowerInclusive, boolean upperInclusive) {
+        BigDecimal upperBound, boolean lowerInclusive, boolean upperInclusive, boolean hasDictionaryWithCompression,
+        @Nullable Dictionary dictionary) {
       super(rangePredicate);
       _lowerBound = lowerBound;
       _upperBound = upperBound;
       _lowerComparisonValue = lowerInclusive ? 0 : 1;
       _upperComparisonValue = upperInclusive ? 0 : -1;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String lowerBoundString = rangePredicate.getLowerBound();
+        String upperBoundString = rangePredicate.getUpperBound();
+        if (dictionary.isSorted()) {
+          int startDictId;
+          if (lowerBoundString.equals(RangePredicate.UNBOUNDED)) {
+            startDictId = 0;
+          } else {
+            int insertionIndex = dictionary.insertionIndexOf(PredicateUtils.getStoredValue(lowerBoundString,
+                DataType.BIG_DECIMAL));
+            if (insertionIndex < 0) {
+              startDictId = -(insertionIndex + 1);
+            } else {
+              if (lowerInclusive) {
+                startDictId = insertionIndex;
+              } else {
+                startDictId = insertionIndex + 1;
+              }
+            }
+          }
+          int endDictId;
+          if (upperBoundString.equals(RangePredicate.UNBOUNDED)) {
+            endDictId = dictionary.length();
+          } else {
+            int insertionIndex = dictionary.insertionIndexOf(PredicateUtils.getStoredValue(upperBoundString,
+                DataType.BIG_DECIMAL));
+            if (insertionIndex < 0) {
+              endDictId = -(insertionIndex + 1);
+            } else {
+              if (upperInclusive) {
+                endDictId = insertionIndex + 1;
+              } else {
+                endDictId = insertionIndex;
+              }
+            }
+          }
+
+          int numMatchingDictIds = endDictId - startDictId;
+          if (numMatchingDictIds <= 0) {
+            _alwaysFalse = true;
+          } else if (dictionary.length() == numMatchingDictIds) {
+            _alwaysTrue = true;
+          }
+        } else {
+          int cardinality = dictionary.length();
+          if (cardinality < DICT_ID_SET_BASED_CARDINALITY_THRESHOLD) {
+            if (!lowerBoundString.equals(RangePredicate.UNBOUNDED)) {
+              lowerBoundString = PredicateUtils.getStoredValue(lowerBoundString, DataType.BIG_DECIMAL);
+            }
+            if (!upperBoundString.equals(RangePredicate.UNBOUNDED)) {
+              upperBoundString = PredicateUtils.getStoredValue(upperBoundString, DataType.BIG_DECIMAL);
+            }
+            IntSet matchingDictIdSet =
+                dictionary.getDictIdsInRange(lowerBoundString, upperBoundString, lowerInclusive, upperInclusive);
+            int numMatchingDictIds = matchingDictIdSet.size();
+            if (numMatchingDictIds == 0) {
+              _alwaysFalse = true;
+            } else if (numMatchingDictIds == cardinality) {
+              _alwaysTrue = true;
+            }
+          }
+        }
+      }
     }
 
     @Override
@@ -530,12 +867,77 @@ public class RangePredicateEvaluatorFactory {
     final int _upperComparisonValue;
 
     StringRawValueBasedRangePredicateEvaluator(RangePredicate rangePredicate, String lowerBound, String upperBound,
-        boolean lowerInclusive, boolean upperInclusive) {
+        boolean lowerInclusive, boolean upperInclusive, boolean hasDictionaryWithCompression,
+        @Nullable Dictionary dictionary) {
       super(rangePredicate);
       _lowerBound = lowerBound;
       _upperBound = upperBound;
       _lowerComparisonValue = lowerInclusive ? 0 : 1;
       _upperComparisonValue = upperInclusive ? 0 : -1;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String lowerBoundString = rangePredicate.getLowerBound();
+        String upperBoundString = rangePredicate.getUpperBound();
+        if (dictionary.isSorted()) {
+          int startDictId;
+          if (lowerBoundString.equals(RangePredicate.UNBOUNDED)) {
+            startDictId = 0;
+          } else {
+            int insertionIndex = dictionary.insertionIndexOf(PredicateUtils.getStoredValue(lowerBoundString,
+                DataType.STRING));
+            if (insertionIndex < 0) {
+              startDictId = -(insertionIndex + 1);
+            } else {
+              if (lowerInclusive) {
+                startDictId = insertionIndex;
+              } else {
+                startDictId = insertionIndex + 1;
+              }
+            }
+          }
+          int endDictId;
+          if (upperBoundString.equals(RangePredicate.UNBOUNDED)) {
+            endDictId = dictionary.length();
+          } else {
+            int insertionIndex = dictionary.insertionIndexOf(PredicateUtils.getStoredValue(upperBoundString,
+                DataType.STRING));
+            if (insertionIndex < 0) {
+              endDictId = -(insertionIndex + 1);
+            } else {
+              if (upperInclusive) {
+                endDictId = insertionIndex + 1;
+              } else {
+                endDictId = insertionIndex;
+              }
+            }
+          }
+
+          int numMatchingDictIds = endDictId - startDictId;
+          if (numMatchingDictIds <= 0) {
+            _alwaysFalse = true;
+          } else if (dictionary.length() == numMatchingDictIds) {
+            _alwaysTrue = true;
+          }
+        } else {
+          int cardinality = dictionary.length();
+          if (cardinality < DICT_ID_SET_BASED_CARDINALITY_THRESHOLD) {
+            if (!lowerBoundString.equals(RangePredicate.UNBOUNDED)) {
+              lowerBoundString = PredicateUtils.getStoredValue(lowerBoundString, DataType.STRING);
+            }
+            if (!upperBoundString.equals(RangePredicate.UNBOUNDED)) {
+              upperBoundString = PredicateUtils.getStoredValue(upperBoundString, DataType.STRING);
+            }
+            IntSet matchingDictIdSet =
+                dictionary.getDictIdsInRange(lowerBoundString, upperBoundString, lowerInclusive, upperInclusive);
+            int numMatchingDictIds = matchingDictIdSet.size();
+            if (numMatchingDictIds == 0) {
+              _alwaysFalse = true;
+            } else if (numMatchingDictIds == cardinality) {
+              _alwaysTrue = true;
+            }
+          }
+        }
+      }
     }
 
     @Override
@@ -557,12 +959,77 @@ public class RangePredicateEvaluatorFactory {
     final int _upperComparisonValue;
 
     BytesRawValueBasedRangePredicateEvaluator(RangePredicate rangePredicate, byte[] lowerBound, byte[] upperBound,
-        boolean lowerInclusive, boolean upperInclusive) {
+        boolean lowerInclusive, boolean upperInclusive, boolean hasDictionaryWithCompression,
+        @Nullable Dictionary dictionary) {
       super(rangePredicate);
       _lowerBound = lowerBound;
       _upperBound = upperBound;
       _lowerComparisonValue = lowerInclusive ? 0 : 1;
       _upperComparisonValue = upperInclusive ? 0 : -1;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String lowerBoundString = rangePredicate.getLowerBound();
+        String upperBoundString = rangePredicate.getUpperBound();
+        if (dictionary.isSorted()) {
+          int startDictId;
+          if (lowerBoundString.equals(RangePredicate.UNBOUNDED)) {
+            startDictId = 0;
+          } else {
+            int insertionIndex = dictionary.insertionIndexOf(PredicateUtils.getStoredValue(lowerBoundString,
+                DataType.BYTES));
+            if (insertionIndex < 0) {
+              startDictId = -(insertionIndex + 1);
+            } else {
+              if (lowerInclusive) {
+                startDictId = insertionIndex;
+              } else {
+                startDictId = insertionIndex + 1;
+              }
+            }
+          }
+          int endDictId;
+          if (upperBoundString.equals(RangePredicate.UNBOUNDED)) {
+            endDictId = dictionary.length();
+          } else {
+            int insertionIndex = dictionary.insertionIndexOf(PredicateUtils.getStoredValue(upperBoundString,
+                DataType.BYTES));
+            if (insertionIndex < 0) {
+              endDictId = -(insertionIndex + 1);
+            } else {
+              if (upperInclusive) {
+                endDictId = insertionIndex + 1;
+              } else {
+                endDictId = insertionIndex;
+              }
+            }
+          }
+
+          int numMatchingDictIds = endDictId - startDictId;
+          if (numMatchingDictIds <= 0) {
+            _alwaysFalse = true;
+          } else if (dictionary.length() == numMatchingDictIds) {
+            _alwaysTrue = true;
+          }
+        } else {
+          int cardinality = dictionary.length();
+          if (cardinality < DICT_ID_SET_BASED_CARDINALITY_THRESHOLD) {
+            if (!lowerBoundString.equals(RangePredicate.UNBOUNDED)) {
+              lowerBoundString = PredicateUtils.getStoredValue(lowerBoundString, DataType.BYTES);
+            }
+            if (!upperBoundString.equals(RangePredicate.UNBOUNDED)) {
+              upperBoundString = PredicateUtils.getStoredValue(upperBoundString, DataType.BYTES);
+            }
+            IntSet matchingDictIdSet =
+                dictionary.getDictIdsInRange(lowerBoundString, upperBoundString, lowerInclusive, upperInclusive);
+            int numMatchingDictIds = matchingDictIdSet.size();
+            if (numMatchingDictIds == 0) {
+              _alwaysFalse = true;
+            } else if (numMatchingDictIds == cardinality) {
+              _alwaysTrue = true;
+            }
+          }
+        }
+      }
     }
 
     @Override

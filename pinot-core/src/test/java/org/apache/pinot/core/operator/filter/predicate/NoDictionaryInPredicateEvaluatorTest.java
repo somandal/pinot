@@ -72,11 +72,11 @@ public class NoDictionaryInPredicateEvaluatorTest {
 
     InPredicate inPredicate = new InPredicate(COLUMN_EXPRESSION, stringValues);
     PredicateEvaluator inPredicateEvaluator =
-        InPredicateEvaluatorFactory.newRawValueBasedEvaluator(inPredicate, FieldSpec.DataType.INT);
+        InPredicateEvaluatorFactory.newRawValueBasedEvaluator(inPredicate, FieldSpec.DataType.INT, false, null);
 
     NotInPredicate notInPredicate = new NotInPredicate(COLUMN_EXPRESSION, stringValues);
     PredicateEvaluator notInPredicateEvaluator =
-        NotInPredicateEvaluatorFactory.newRawValueBasedEvaluator(notInPredicate, FieldSpec.DataType.INT);
+        NotInPredicateEvaluatorFactory.newRawValueBasedEvaluator(notInPredicate, FieldSpec.DataType.INT, false, null);
 
     for (Integer value : valueSet) {
       Assert.assertTrue(inPredicateEvaluator.applySV(value));
@@ -110,11 +110,11 @@ public class NoDictionaryInPredicateEvaluatorTest {
 
     InPredicate inPredicate = new InPredicate(COLUMN_EXPRESSION, stringValues);
     PredicateEvaluator inPredicateEvaluator =
-        InPredicateEvaluatorFactory.newRawValueBasedEvaluator(inPredicate, FieldSpec.DataType.LONG);
+        InPredicateEvaluatorFactory.newRawValueBasedEvaluator(inPredicate, FieldSpec.DataType.LONG, false, null);
 
     NotInPredicate notInPredicate = new NotInPredicate(COLUMN_EXPRESSION, stringValues);
     PredicateEvaluator notInPredicateEvaluator =
-        NotInPredicateEvaluatorFactory.newRawValueBasedEvaluator(notInPredicate, FieldSpec.DataType.LONG);
+        NotInPredicateEvaluatorFactory.newRawValueBasedEvaluator(notInPredicate, FieldSpec.DataType.LONG, false, null);
 
     for (Long value : valueSet) {
       Assert.assertTrue(inPredicateEvaluator.applySV(value));
@@ -149,11 +149,12 @@ public class NoDictionaryInPredicateEvaluatorTest {
 
     InPredicate inPredicate = new InPredicate(COLUMN_EXPRESSION, stringValues);
     PredicateEvaluator inPredicateEvaluator =
-        InPredicateEvaluatorFactory.newRawValueBasedEvaluator(inPredicate, FieldSpec.DataType.FLOAT);
+        InPredicateEvaluatorFactory.newRawValueBasedEvaluator(inPredicate, FieldSpec.DataType.FLOAT, false, null);
 
     NotInPredicate notInPredicate = new NotInPredicate(COLUMN_EXPRESSION, stringValues);
     PredicateEvaluator notInPredicateEvaluator =
-        NotInPredicateEvaluatorFactory.newRawValueBasedEvaluator(notInPredicate, FieldSpec.DataType.FLOAT);
+        NotInPredicateEvaluatorFactory.newRawValueBasedEvaluator(notInPredicate, FieldSpec.DataType.FLOAT, false,
+            null);
 
     for (float value : valueSet) {
       Assert.assertTrue(inPredicateEvaluator.applySV(value));
@@ -188,11 +189,12 @@ public class NoDictionaryInPredicateEvaluatorTest {
 
     InPredicate inPredicate = new InPredicate(COLUMN_EXPRESSION, stringValues);
     PredicateEvaluator inPredicateEvaluator =
-        InPredicateEvaluatorFactory.newRawValueBasedEvaluator(inPredicate, FieldSpec.DataType.DOUBLE);
+        InPredicateEvaluatorFactory.newRawValueBasedEvaluator(inPredicate, FieldSpec.DataType.DOUBLE, false, null);
 
     NotInPredicate notInPredicate = new NotInPredicate(COLUMN_EXPRESSION, stringValues);
     PredicateEvaluator notInPredicateEvaluator =
-        NotInPredicateEvaluatorFactory.newRawValueBasedEvaluator(notInPredicate, FieldSpec.DataType.DOUBLE);
+        NotInPredicateEvaluatorFactory.newRawValueBasedEvaluator(notInPredicate, FieldSpec.DataType.DOUBLE, false,
+            null);
 
     for (double value : valueSet) {
       Assert.assertTrue(inPredicateEvaluator.applySV(value));
@@ -227,11 +229,13 @@ public class NoDictionaryInPredicateEvaluatorTest {
 
     InPredicate inPredicate = new InPredicate(COLUMN_EXPRESSION, stringValues);
     PredicateEvaluator inPredicateEvaluator =
-        InPredicateEvaluatorFactory.newRawValueBasedEvaluator(inPredicate, FieldSpec.DataType.BIG_DECIMAL);
+        InPredicateEvaluatorFactory.newRawValueBasedEvaluator(inPredicate, FieldSpec.DataType.BIG_DECIMAL, false,
+            null);
 
     NotInPredicate notInPredicate = new NotInPredicate(COLUMN_EXPRESSION, stringValues);
     PredicateEvaluator notInPredicateEvaluator =
-        NotInPredicateEvaluatorFactory.newRawValueBasedEvaluator(notInPredicate, FieldSpec.DataType.BIG_DECIMAL);
+        NotInPredicateEvaluatorFactory.newRawValueBasedEvaluator(notInPredicate, FieldSpec.DataType.BIG_DECIMAL, false,
+            null);
 
     for (BigDecimal value : valueSet) {
       Assert.assertTrue(inPredicateEvaluator.applySV(value));
@@ -258,11 +262,12 @@ public class NoDictionaryInPredicateEvaluatorTest {
 
     InPredicate inPredicate = new InPredicate(COLUMN_EXPRESSION, stringValues);
     PredicateEvaluator inPredicateEvaluator =
-        InPredicateEvaluatorFactory.newRawValueBasedEvaluator(inPredicate, FieldSpec.DataType.STRING);
+        InPredicateEvaluatorFactory.newRawValueBasedEvaluator(inPredicate, FieldSpec.DataType.STRING, false, null);
 
     NotInPredicate notInPredicate = new NotInPredicate(COLUMN_EXPRESSION, stringValues);
     PredicateEvaluator notInPredicateEvaluator =
-        NotInPredicateEvaluatorFactory.newRawValueBasedEvaluator(notInPredicate, FieldSpec.DataType.STRING);
+        NotInPredicateEvaluatorFactory.newRawValueBasedEvaluator(notInPredicate, FieldSpec.DataType.STRING, false,
+            null);
 
     for (String value : valueSet) {
       Assert.assertTrue(inPredicateEvaluator.applySV(value));
@@ -296,11 +301,11 @@ public class NoDictionaryInPredicateEvaluatorTest {
 
     InPredicate inPredicate = new InPredicate(COLUMN_EXPRESSION, stringValues);
     PredicateEvaluator inPredicateEvaluator =
-        InPredicateEvaluatorFactory.newRawValueBasedEvaluator(inPredicate, FieldSpec.DataType.BYTES);
+        InPredicateEvaluatorFactory.newRawValueBasedEvaluator(inPredicate, FieldSpec.DataType.BYTES, false, null);
 
     NotInPredicate notInPredicate = new NotInPredicate(COLUMN_EXPRESSION, stringValues);
     PredicateEvaluator notInPredicateEvaluator =
-        NotInPredicateEvaluatorFactory.newRawValueBasedEvaluator(notInPredicate, FieldSpec.DataType.BYTES);
+        NotInPredicateEvaluatorFactory.newRawValueBasedEvaluator(notInPredicate, FieldSpec.DataType.BYTES, false, null);
 
     for (byte[] value : valueSet) {
       Assert.assertTrue(inPredicateEvaluator.applySV(value));

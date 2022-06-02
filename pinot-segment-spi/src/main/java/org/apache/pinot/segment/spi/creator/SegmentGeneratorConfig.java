@@ -74,6 +74,7 @@ public class SegmentGeneratorConfig implements Serializable {
   private final Map<String, String> _customProperties = new HashMap<>();
   private final Set<String> _rawIndexCreationColumns = new HashSet<>();
   private final Map<String, ChunkCompressionType> _rawIndexCompressionType = new HashMap<>();
+  private final Map<String, ChunkCompressionType> _dictionaryCompressionForwardIndexCompressionType = new HashMap<>();
   private final List<String> _invertedIndexCreationColumns = new ArrayList<>();
   private final List<String> _bloomFilterCreationColumns = new ArrayList<>();
   private final List<String> _rangeIndexCreationColumns = new ArrayList<>();
@@ -219,6 +220,7 @@ public class SegmentGeneratorConfig implements Serializable {
       extractFSTIndexColumnsFromTableConfig(tableConfig);
       extractH3IndexConfigsFromTableConfig(tableConfig);
       extractCompressionCodecConfigsFromTableConfig(tableConfig);
+      extractForwardDictCompressedIndexConfigsFromTableConfig(tableConfig);
 
       _fstTypeForFSTIndex = tableConfig.getIndexingConfig().getFSTIndexType();
 
@@ -306,6 +308,25 @@ public class SegmentGeneratorConfig implements Serializable {
         if (fieldConfig.getIndexType() == FieldConfig.IndexType.H3) {
           //noinspection ConstantConditions
           _h3IndexConfigs.put(fieldConfig.getName(), new H3IndexConfig(fieldConfig.getProperties()));
+        }
+      }
+    }
+  }
+
+  private void extractForwardDictCompressedIndexConfigsFromTableConfig(TableConfig tableConfig) {
+    List<FieldConfig> fieldConfigList = tableConfig.getFieldConfigList();
+    if (fieldConfigList != null) {
+      for (FieldConfig fieldConfig : fieldConfigList) {
+        if (fieldConfig.getIndexType() == FieldConfig.IndexType.FORWARDDICTCOMPRESSED) {
+          Preconditions.checkArgument(fieldConfig.getEncodingType() != null && fieldConfig.getEncodingType()
+                  .equals(FieldConfig.EncodingType.RAWDICTIONARY),
+              "EncodingType for forward dict compression must be RAWDICTIONARY");
+          // If the compression codec field config is not present, default it
+          FieldConfig.CompressionCodec compressionCodec = fieldConfig.getCompressionCodec() != null
+              ? fieldConfig.getCompressionCodec() : FieldConfig.FORWARD_INDEX_DICT_COMPRESSED_DEFAULT_COMPRESSION_CODEC;
+          ChunkCompressionType chunkCompressionType =
+              ChunkCompressionType.valueOf(compressionCodec.toString());
+          _dictionaryCompressionForwardIndexCompressionType.put(fieldConfig.getName(), chunkCompressionType);
         }
       }
     }
@@ -732,6 +753,17 @@ public class SegmentGeneratorConfig implements Serializable {
   public void setRawIndexCompressionType(Map<String, ChunkCompressionType> rawIndexCompressionType) {
     _rawIndexCompressionType.clear();
     _rawIndexCompressionType.putAll(rawIndexCompressionType);
+  }
+
+  public Map<String, ChunkCompressionType> getDictionaryCompressionForwardIndexCompressionType() {
+    return _dictionaryCompressionForwardIndexCompressionType;
+  }
+
+  @VisibleForTesting
+  public void setDictionaryCompressionForwardIndexCompressionType(
+      Map<String, ChunkCompressionType> dictionaryCompressionForwardIndexCompressionType) {
+    _dictionaryCompressionForwardIndexCompressionType.clear();
+    _dictionaryCompressionForwardIndexCompressionType.putAll(dictionaryCompressionForwardIndexCompressionType);
   }
 
   public List<String> getMetrics() {

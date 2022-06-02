@@ -47,6 +47,8 @@ public class FieldConfig extends BaseJsonConfig {
   // "native" for native, default is Lucene
   public static final String TEXT_FST_TYPE = "fstType";
   public static final String TEXT_NATIVE_FST_LITERAL = "native";
+  // Forward index dictionary compressed default compression codec
+  public static final CompressionCodec FORWARD_INDEX_DICT_COMPRESSED_DEFAULT_COMPRESSION_CODEC = CompressionCodec.LZ4;
 
   private final String _name;
   private final EncodingType _encodingType;
@@ -86,16 +88,16 @@ public class FieldConfig extends BaseJsonConfig {
 
   // If null, we will create dictionary encoded forward index by default
   public enum EncodingType {
-    RAW, DICTIONARY
+    RAW, DICTIONARY, RAWDICTIONARY
   }
 
   // If null, there won't be any index
   public enum IndexType {
-    INVERTED, SORTED, TEXT, FST, H3, JSON, TIMESTAMP, RANGE
+    INVERTED, SORTED, TEXT, FST, H3, JSON, TIMESTAMP, RANGE, FORWARDDICTCOMPRESSED
   }
 
   public enum CompressionCodec {
-    PASS_THROUGH, SNAPPY, ZSTANDARD, LZ4
+    PASS_THROUGH, SNAPPY, ZSTANDARD, LZ4, LZ4_LENGTH_PREFIXED
   }
 
   public String getName() {

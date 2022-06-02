@@ -19,6 +19,7 @@
 package org.apache.pinot.segment.local.segment.index.loader;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -31,6 +32,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.pinot.segment.local.segment.index.column.PhysicalColumnIndexContainer;
 import org.apache.pinot.segment.local.segment.index.loader.columnminmaxvalue.ColumnMinMaxValueGeneratorMode;
 import org.apache.pinot.segment.local.segment.store.TextIndexUtils;
+import org.apache.pinot.segment.spi.compression.ChunkCompressionType;
 import org.apache.pinot.segment.spi.creator.SegmentGeneratorConfig;
 import org.apache.pinot.segment.spi.creator.SegmentVersion;
 import org.apache.pinot.segment.spi.index.creator.H3IndexConfig;
@@ -67,6 +69,7 @@ public class IndexLoadingConfig {
   private FSTType _fstIndexType = FSTType.LUCENE;
   private Set<String> _jsonIndexColumns = new HashSet<>();
   private Map<String, H3IndexConfig> _h3IndexConfigs = new HashMap<>();
+  private Map<String, ChunkCompressionType> _dictionaryCompressionForwardIndexCompressionType = new HashMap<>();
   private Set<String> _noDictionaryColumns = new HashSet<>(); // TODO: replace this by _noDictionaryConfig.
   private Map<String, String> _noDictionaryConfig = new HashMap<>();
   private Set<String> _varLengthDictionaryColumns = new HashSet<>();
@@ -156,6 +159,7 @@ public class IndexLoadingConfig {
     extractTextIndexColumnsFromTableConfig(tableConfig);
     extractFSTIndexColumnsFromTableConfig(tableConfig);
     extractH3IndexConfigsFromTableConfig(tableConfig);
+    extractForwardDictCompressedIndexConfigsFromTableConfig(tableConfig);
 
     Map<String, List<TimestampIndexGranularity>> timestampIndexConfigs =
         SegmentGeneratorConfig.extractTimestampIndexConfigsFromTableConfig(tableConfig);
@@ -263,6 +267,25 @@ public class IndexLoadingConfig {
     }
   }
 
+  private void extractForwardDictCompressedIndexConfigsFromTableConfig(TableConfig tableConfig) {
+    List<FieldConfig> fieldConfigList = tableConfig.getFieldConfigList();
+    if (fieldConfigList != null) {
+      for (FieldConfig fieldConfig : fieldConfigList) {
+        if (fieldConfig.getIndexType() == FieldConfig.IndexType.FORWARDDICTCOMPRESSED) {
+          Preconditions.checkArgument(fieldConfig.getEncodingType() != null && fieldConfig.getEncodingType()
+                  .equals(FieldConfig.EncodingType.RAWDICTIONARY),
+              "EncodingType for forward dict compression must be RAWDICTIONARY");
+          // If the compression codec field config is not present, default it
+          FieldConfig.CompressionCodec compressionCodec = fieldConfig.getCompressionCodec() != null
+              ? fieldConfig.getCompressionCodec() : FieldConfig.FORWARD_INDEX_DICT_COMPRESSED_DEFAULT_COMPRESSION_CODEC;
+          ChunkCompressionType chunkCompressionType =
+              ChunkCompressionType.valueOf(compressionCodec.toString());
+          _dictionaryCompressionForwardIndexCompressionType.put(fieldConfig.getName(), chunkCompressionType);
+        }
+      }
+    }
+  }
+
   private void extractFromInstanceConfig(InstanceDataManagerConfig instanceDataManagerConfig) {
     if (instanceDataManagerConfig == null) {
       return;
@@ -355,6 +378,10 @@ public class IndexLoadingConfig {
     return _h3IndexConfigs;
   }
 
+  public Map<String, ChunkCompressionType> getDictionaryCompressionForwardIndexCompressionType() {
+    return _dictionaryCompressionForwardIndexCompressionType;
+  }
+
   public Map<String, Map<String, String>> getColumnProperties() {
     return _columnProperties;
   }
@@ -411,6 +438,12 @@ public class IndexLoadingConfig {
   }
 
   @VisibleForTesting
+  public void setDictionaryCompressionForwardIndexCompressionType(
+      Map<String, ChunkCompressionType> dictionaryCompressionForwardIndexCompressionType) {
+    _dictionaryCompressionForwardIndexCompressionType = dictionaryCompressionForwardIndexCompressionType;
+  }
+
+  @VisibleForTesting
   public void setBloomFilterConfigs(Map<String, BloomFilterConfig> bloomFilterConfigs) {
     _bloomFilterConfigs = bloomFilterConfigs;
   }
@@ -424,7 +457,7 @@ public class IndexLoadingConfig {
     return _noDictionaryColumns;
   }
 
-  public Map<String, String> getnoDictionaryConfig() {
+  public Map<String, String> getNoDictionaryConfig() {
     return _noDictionaryConfig;
   }
 

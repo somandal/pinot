@@ -269,8 +269,20 @@ public class TransformFunctionFactory {
    */
   public static TransformFunction get(@Nullable QueryContext queryContext, ExpressionContext expression,
       Map<String, DataSource> dataSourceMap) {
+    boolean anyDataSourceHasDictionaryWithCompression = false;
+    for (DataSource dataSource : dataSourceMap.values()) {
+      if (dataSource.hasDictionaryWithCompression()) {
+        anyDataSourceHasDictionaryWithCompression = true;
+        break;
+      }
+    }
+
     switch (expression.getType()) {
       case FUNCTION:
+        if (anyDataSourceHasDictionaryWithCompression) {
+          throw new BadQueryRequestException("Transform for FUNCTION type not supported yet with dictionary with"
+              + " compression columns!");
+        }
         FunctionContext function = expression.getFunction();
         String functionName = canonicalize(function.getFunctionName());
         List<ExpressionContext> arguments = function.getArguments();
@@ -314,6 +326,10 @@ public class TransformFunctionFactory {
         String columnName = expression.getIdentifier();
         return new IdentifierTransformFunction(columnName, dataSourceMap.get(columnName));
       case LITERAL:
+        if (anyDataSourceHasDictionaryWithCompression) {
+          throw new BadQueryRequestException("Transform for LITERAL type not supported yet with dictionary with"
+              + " compression columns!");
+        }
         return queryContext == null ? new LiteralTransformFunction(expression.getLiteral())
             : queryContext.getOrComputeSharedValue(LiteralTransformFunction.class, expression.getLiteral(),
                 LiteralTransformFunction::new);

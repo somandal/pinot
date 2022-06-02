@@ -74,6 +74,7 @@ public final class PhysicalColumnIndexContainer implements ColumnIndexContainer 
   private final BaseImmutableDictionary _dictionary;
   private final BloomFilterReader _bloomFilter;
   private final NullValueVectorReaderImpl _nullValueVectorReader;
+  private final boolean _hasDictionaryWithCompression;
 
   public PhysicalColumnIndexContainer(SegmentDirectory.Reader segmentReader, ColumnMetadata metadata,
       IndexLoadingConfig indexLoadingConfig, File segmentIndexDir, IndexReaderProvider indexReaderProvider)
@@ -133,12 +134,14 @@ public final class PhysicalColumnIndexContainer implements ColumnIndexContainer 
       _rangeIndex = null;
     }
 
+    _hasDictionaryWithCompression = metadata.hasDictionaryWithCompression();
+
     PinotDataBuffer fwdIndexBuffer = segmentReader.getIndexFor(columnName, ColumnIndexType.FORWARD_INDEX);
-    if (metadata.hasDictionary()) {
-      // Dictionary-based index
+    if (metadata.hasDictionary() || _hasDictionaryWithCompression) {
+      // Dictionary-based index (including dictionary with compression)
       _dictionary = loadDictionary(segmentReader.getIndexFor(columnName, ColumnIndexType.DICTIONARY), metadata,
           loadOnHeapDictionary);
-      if (metadata.isSingleValue()) {
+      if (metadata.isSingleValue() && !_hasDictionaryWithCompression) {
         // Single-value
         if (metadata.isSorted()) {
           // Sorted
@@ -220,6 +223,11 @@ public final class PhysicalColumnIndexContainer implements ColumnIndexContainer 
   @Override
   public NullValueVectorReader getNullValueVector() {
     return _nullValueVectorReader;
+  }
+
+  @Override
+  public boolean hasDictionaryWithCompression() {
+    return _hasDictionaryWithCompression;
   }
 
   //TODO: move this to a DictionaryLoader class

@@ -20,6 +20,7 @@ package org.apache.pinot.core.operator.filter.predicate;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
+import javax.annotation.Nullable;
 import org.apache.pinot.common.request.context.predicate.NotEqPredicate;
 import org.apache.pinot.segment.spi.index.reader.Dictionary;
 import org.apache.pinot.spi.data.FieldSpec.DataType;
@@ -53,30 +54,41 @@ public class NotEqualsPredicateEvaluatorFactory {
    *
    * @param notEqPredicate NOT_EQ predicate to evaluate
    * @param dataType Data type for the column
+   * @param hasDictionaryWithCompression whether dictionary with compression is enabled
+   * @param dictionary for the column
    * @return Raw value based NOT_EQ predicate evaluator
    */
   public static BaseRawValueBasedPredicateEvaluator newRawValueBasedEvaluator(NotEqPredicate notEqPredicate,
-      DataType dataType) {
+      DataType dataType, boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
     String value = notEqPredicate.getValue();
     switch (dataType) {
       case INT:
-        return new IntRawValueBasedNeqPredicateEvaluator(notEqPredicate, Integer.parseInt(value));
+        return new IntRawValueBasedNeqPredicateEvaluator(notEqPredicate, Integer.parseInt(value),
+            hasDictionaryWithCompression, dictionary);
       case LONG:
-        return new LongRawValueBasedNeqPredicateEvaluator(notEqPredicate, Long.parseLong(value));
+        return new LongRawValueBasedNeqPredicateEvaluator(notEqPredicate, Long.parseLong(value),
+            hasDictionaryWithCompression, dictionary);
       case FLOAT:
-        return new FloatRawValueBasedNeqPredicateEvaluator(notEqPredicate, Float.parseFloat(value));
+        return new FloatRawValueBasedNeqPredicateEvaluator(notEqPredicate, Float.parseFloat(value),
+            hasDictionaryWithCompression, dictionary);
       case DOUBLE:
-        return new DoubleRawValueBasedNeqPredicateEvaluator(notEqPredicate, Double.parseDouble(value));
+        return new DoubleRawValueBasedNeqPredicateEvaluator(notEqPredicate, Double.parseDouble(value),
+            hasDictionaryWithCompression, dictionary);
       case BIG_DECIMAL:
-        return new BigDecimalRawValueBasedNeqPredicateEvaluator(notEqPredicate, new BigDecimal(value));
+        return new BigDecimalRawValueBasedNeqPredicateEvaluator(notEqPredicate, new BigDecimal(value),
+            hasDictionaryWithCompression, dictionary);
       case BOOLEAN:
-        return new IntRawValueBasedNeqPredicateEvaluator(notEqPredicate, BooleanUtils.toInt(value));
+        return new IntRawValueBasedNeqPredicateEvaluator(notEqPredicate, BooleanUtils.toInt(value),
+            hasDictionaryWithCompression, dictionary);
       case TIMESTAMP:
-        return new LongRawValueBasedNeqPredicateEvaluator(notEqPredicate, TimestampUtils.toMillisSinceEpoch(value));
+        return new LongRawValueBasedNeqPredicateEvaluator(notEqPredicate, TimestampUtils.toMillisSinceEpoch(value),
+            hasDictionaryWithCompression, dictionary);
       case STRING:
-        return new StringRawValueBasedNeqPredicateEvaluator(notEqPredicate, value);
+        return new StringRawValueBasedNeqPredicateEvaluator(notEqPredicate, value, hasDictionaryWithCompression,
+            dictionary);
       case BYTES:
-        return new BytesRawValueBasedNeqPredicateEvaluator(notEqPredicate, BytesUtils.toBytes(value));
+        return new BytesRawValueBasedNeqPredicateEvaluator(notEqPredicate, BytesUtils.toBytes(value),
+            hasDictionaryWithCompression, dictionary);
       default:
         throw new IllegalStateException("Unsupported data type: " + dataType);
     }
@@ -153,9 +165,22 @@ public class NotEqualsPredicateEvaluatorFactory {
   private static final class IntRawValueBasedNeqPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final int _nonMatchingValue;
 
-    IntRawValueBasedNeqPredicateEvaluator(NotEqPredicate notEqPredicate, int nonMatchingValue) {
+    IntRawValueBasedNeqPredicateEvaluator(NotEqPredicate notEqPredicate, int nonMatchingValue,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(notEqPredicate);
       _nonMatchingValue = nonMatchingValue;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String predicateValue = PredicateUtils.getStoredValue(notEqPredicate.getValue(), DataType.INT);
+        int nonMatchingDictId = dictionary.indexOf(predicateValue);
+        if (nonMatchingDictId >= 0) {
+          if (dictionary.length() == 1) {
+            _alwaysFalse = true;
+          }
+        } else {
+          _alwaysTrue = true;
+        }
+      }
     }
 
     @Override
@@ -185,9 +210,22 @@ public class NotEqualsPredicateEvaluatorFactory {
   private static final class LongRawValueBasedNeqPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final long _nonMatchingValue;
 
-    LongRawValueBasedNeqPredicateEvaluator(NotEqPredicate notEqPredicate, long nonMatchingValue) {
+    LongRawValueBasedNeqPredicateEvaluator(NotEqPredicate notEqPredicate, long nonMatchingValue,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(notEqPredicate);
       _nonMatchingValue = nonMatchingValue;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String predicateValue = PredicateUtils.getStoredValue(notEqPredicate.getValue(), DataType.LONG);
+        int nonMatchingDictId = dictionary.indexOf(predicateValue);
+        if (nonMatchingDictId >= 0) {
+          if (dictionary.length() == 1) {
+            _alwaysFalse = true;
+          }
+        } else {
+          _alwaysTrue = true;
+        }
+      }
     }
 
     @Override
@@ -217,9 +255,22 @@ public class NotEqualsPredicateEvaluatorFactory {
   private static final class FloatRawValueBasedNeqPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final float _nonMatchingValue;
 
-    FloatRawValueBasedNeqPredicateEvaluator(NotEqPredicate notEqPredicate, float nonMatchingValue) {
+    FloatRawValueBasedNeqPredicateEvaluator(NotEqPredicate notEqPredicate, float nonMatchingValue,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(notEqPredicate);
       _nonMatchingValue = nonMatchingValue;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String predicateValue = PredicateUtils.getStoredValue(notEqPredicate.getValue(), DataType.FLOAT);
+        int nonMatchingDictId = dictionary.indexOf(predicateValue);
+        if (nonMatchingDictId >= 0) {
+          if (dictionary.length() == 1) {
+            _alwaysFalse = true;
+          }
+        } else {
+          _alwaysTrue = true;
+        }
+      }
     }
 
     @Override
@@ -249,9 +300,22 @@ public class NotEqualsPredicateEvaluatorFactory {
   private static final class DoubleRawValueBasedNeqPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final double _nonMatchingValue;
 
-    DoubleRawValueBasedNeqPredicateEvaluator(NotEqPredicate notEqPredicate, double nonMatchingValue) {
+    DoubleRawValueBasedNeqPredicateEvaluator(NotEqPredicate notEqPredicate, double nonMatchingValue,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(notEqPredicate);
       _nonMatchingValue = nonMatchingValue;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String predicateValue = PredicateUtils.getStoredValue(notEqPredicate.getValue(), DataType.DOUBLE);
+        int nonMatchingDictId = dictionary.indexOf(predicateValue);
+        if (nonMatchingDictId >= 0) {
+          if (dictionary.length() == 1) {
+            _alwaysFalse = true;
+          }
+        } else {
+          _alwaysTrue = true;
+        }
+      }
     }
 
     @Override
@@ -281,9 +345,22 @@ public class NotEqualsPredicateEvaluatorFactory {
   private static final class BigDecimalRawValueBasedNeqPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final BigDecimal _nonMatchingValue;
 
-    BigDecimalRawValueBasedNeqPredicateEvaluator(NotEqPredicate notEqPredicate, BigDecimal nonMatchingValue) {
+    BigDecimalRawValueBasedNeqPredicateEvaluator(NotEqPredicate notEqPredicate, BigDecimal nonMatchingValue,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(notEqPredicate);
       _nonMatchingValue = nonMatchingValue;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String predicateValue = PredicateUtils.getStoredValue(notEqPredicate.getValue(), DataType.BIG_DECIMAL);
+        int nonMatchingDictId = dictionary.indexOf(predicateValue);
+        if (nonMatchingDictId >= 0) {
+          if (dictionary.length() == 1) {
+            _alwaysFalse = true;
+          }
+        } else {
+          _alwaysTrue = true;
+        }
+      }
     }
 
     @Override
@@ -300,9 +377,22 @@ public class NotEqualsPredicateEvaluatorFactory {
   private static final class StringRawValueBasedNeqPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final String _nonMatchingValue;
 
-    StringRawValueBasedNeqPredicateEvaluator(NotEqPredicate notEqPredicate, String nonMatchingValue) {
+    StringRawValueBasedNeqPredicateEvaluator(NotEqPredicate notEqPredicate, String nonMatchingValue,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(notEqPredicate);
       _nonMatchingValue = nonMatchingValue;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String predicateValue = PredicateUtils.getStoredValue(notEqPredicate.getValue(), DataType.STRING);
+        int nonMatchingDictId = dictionary.indexOf(predicateValue);
+        if (nonMatchingDictId >= 0) {
+          if (dictionary.length() == 1) {
+            _alwaysFalse = true;
+          }
+        } else {
+          _alwaysTrue = true;
+        }
+      }
     }
 
     @Override
@@ -319,9 +409,22 @@ public class NotEqualsPredicateEvaluatorFactory {
   private static final class BytesRawValueBasedNeqPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final byte[] _nonMatchingValue;
 
-    BytesRawValueBasedNeqPredicateEvaluator(NotEqPredicate notEqPredicate, byte[] nonMatchingValue) {
+    BytesRawValueBasedNeqPredicateEvaluator(NotEqPredicate notEqPredicate, byte[] nonMatchingValue,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(notEqPredicate);
       _nonMatchingValue = nonMatchingValue;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        String predicateValue = PredicateUtils.getStoredValue(notEqPredicate.getValue(), DataType.BYTES);
+        int nonMatchingDictId = dictionary.indexOf(predicateValue);
+        if (nonMatchingDictId >= 0) {
+          if (dictionary.length() == 1) {
+            _alwaysFalse = true;
+          }
+        } else {
+          _alwaysTrue = true;
+        }
+      }
     }
 
     @Override

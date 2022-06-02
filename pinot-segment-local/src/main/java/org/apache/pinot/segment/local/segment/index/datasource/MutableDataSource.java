@@ -49,7 +49,7 @@ public class MutableDataSource extends BaseDataSource {
       @Nullable NullValueVectorReader nullValueVector) {
     super(new MutableDataSourceMetadata(fieldSpec, numDocs, numValues, maxNumValuesPerMVEntry, partitionFunction,
             partitions, minValue, maxValue), forwardIndex, dictionary, invertedIndex, rangeIndex, textIndex, fstIndex,
-        jsonIndex, h3Index, bloomFilter, nullValueVector);
+        jsonIndex, h3Index, bloomFilter, nullValueVector, false);
   }
 
   private static class MutableDataSourceMetadata implements DataSourceMetadata {

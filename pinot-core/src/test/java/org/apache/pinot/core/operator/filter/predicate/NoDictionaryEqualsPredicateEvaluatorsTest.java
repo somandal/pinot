@@ -53,11 +53,12 @@ public class NoDictionaryEqualsPredicateEvaluatorsTest {
 
     EqPredicate eqPredicate = new EqPredicate(COLUMN_EXPRESSION, stringValue);
     PredicateEvaluator eqPredicateEvaluator =
-        EqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(eqPredicate, FieldSpec.DataType.INT);
+        EqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(eqPredicate, FieldSpec.DataType.INT, false, null);
 
     NotEqPredicate notEqPredicate = new NotEqPredicate(COLUMN_EXPRESSION, stringValue);
     PredicateEvaluator neqPredicateEvaluator =
-        NotEqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(notEqPredicate, FieldSpec.DataType.INT);
+        NotEqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(notEqPredicate, FieldSpec.DataType.INT, false,
+            null);
 
     Assert.assertTrue(eqPredicateEvaluator.applySV(intValue));
     Assert.assertFalse(neqPredicateEvaluator.applySV(intValue));
@@ -89,11 +90,12 @@ public class NoDictionaryEqualsPredicateEvaluatorsTest {
 
     EqPredicate eqPredicate = new EqPredicate(COLUMN_EXPRESSION, stringValue);
     PredicateEvaluator eqPredicateEvaluator =
-        EqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(eqPredicate, FieldSpec.DataType.LONG);
+        EqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(eqPredicate, FieldSpec.DataType.LONG, false, null);
 
     NotEqPredicate notEqPredicate = new NotEqPredicate(COLUMN_EXPRESSION, stringValue);
     PredicateEvaluator neqPredicateEvaluator =
-        NotEqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(notEqPredicate, FieldSpec.DataType.LONG);
+        NotEqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(notEqPredicate, FieldSpec.DataType.LONG, false,
+            null);
 
     Assert.assertTrue(eqPredicateEvaluator.applySV(longValue));
     Assert.assertFalse(neqPredicateEvaluator.applySV(longValue));
@@ -125,11 +127,12 @@ public class NoDictionaryEqualsPredicateEvaluatorsTest {
 
     EqPredicate eqPredicate = new EqPredicate(COLUMN_EXPRESSION, stringValue);
     PredicateEvaluator eqPredicateEvaluator =
-        EqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(eqPredicate, FieldSpec.DataType.FLOAT);
+        EqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(eqPredicate, FieldSpec.DataType.FLOAT, false, null);
 
     NotEqPredicate notEqPredicate = new NotEqPredicate(COLUMN_EXPRESSION, stringValue);
     PredicateEvaluator neqPredicateEvaluator =
-        NotEqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(notEqPredicate, FieldSpec.DataType.FLOAT);
+        NotEqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(notEqPredicate, FieldSpec.DataType.FLOAT, false,
+            null);
 
     Assert.assertTrue(eqPredicateEvaluator.applySV(floatValue));
     Assert.assertFalse(neqPredicateEvaluator.applySV(floatValue));
@@ -161,11 +164,12 @@ public class NoDictionaryEqualsPredicateEvaluatorsTest {
 
     EqPredicate eqPredicate = new EqPredicate(COLUMN_EXPRESSION, stringValue);
     PredicateEvaluator eqPredicateEvaluator =
-        EqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(eqPredicate, FieldSpec.DataType.DOUBLE);
+        EqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(eqPredicate, FieldSpec.DataType.DOUBLE, false, null);
 
     NotEqPredicate notEqPredicate = new NotEqPredicate(COLUMN_EXPRESSION, stringValue);
     PredicateEvaluator neqPredicateEvaluator =
-        NotEqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(notEqPredicate, FieldSpec.DataType.DOUBLE);
+        NotEqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(notEqPredicate, FieldSpec.DataType.DOUBLE, false,
+            null);
 
     Assert.assertTrue(eqPredicateEvaluator.applySV(doubleValue));
     Assert.assertFalse(neqPredicateEvaluator.applySV(doubleValue));
@@ -197,11 +201,13 @@ public class NoDictionaryEqualsPredicateEvaluatorsTest {
 
     EqPredicate eqPredicate = new EqPredicate(COLUMN_EXPRESSION, stringValue);
     PredicateEvaluator eqPredicateEvaluator =
-        EqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(eqPredicate, FieldSpec.DataType.BIG_DECIMAL);
+        EqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(eqPredicate, FieldSpec.DataType.BIG_DECIMAL, false,
+            null);
 
     NotEqPredicate notEqPredicate = new NotEqPredicate(COLUMN_EXPRESSION, stringValue);
     PredicateEvaluator neqPredicateEvaluator =
-        NotEqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(notEqPredicate, FieldSpec.DataType.BIG_DECIMAL);
+        NotEqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(notEqPredicate, FieldSpec.DataType.BIG_DECIMAL,
+            false, null);
 
     Assert.assertTrue(eqPredicateEvaluator.applySV(bigDecimalValue));
     Assert.assertFalse(neqPredicateEvaluator.applySV(bigDecimalValue));
@@ -219,11 +225,12 @@ public class NoDictionaryEqualsPredicateEvaluatorsTest {
 
     EqPredicate eqPredicate = new EqPredicate(COLUMN_EXPRESSION, stringValue);
     PredicateEvaluator eqPredicateEvaluator =
-        EqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(eqPredicate, FieldSpec.DataType.STRING);
+        EqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(eqPredicate, FieldSpec.DataType.STRING, false, null);
 
     NotEqPredicate notEqPredicate = new NotEqPredicate(COLUMN_EXPRESSION, stringValue);
     PredicateEvaluator neqPredicateEvaluator =
-        NotEqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(notEqPredicate, FieldSpec.DataType.STRING);
+        NotEqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(notEqPredicate, FieldSpec.DataType.STRING, false,
+            null);
 
     Assert.assertTrue(eqPredicateEvaluator.applySV(stringValue));
     Assert.assertFalse(neqPredicateEvaluator.applySV(stringValue));
@@ -255,11 +262,12 @@ public class NoDictionaryEqualsPredicateEvaluatorsTest {
 
     EqPredicate eqPredicate = new EqPredicate(COLUMN_EXPRESSION, stringValue);
     PredicateEvaluator eqPredicateEvaluator =
-        EqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(eqPredicate, FieldSpec.DataType.BYTES);
+        EqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(eqPredicate, FieldSpec.DataType.BYTES, false, null);
 
     NotEqPredicate notEqPredicate = new NotEqPredicate(COLUMN_EXPRESSION, stringValue);
     PredicateEvaluator neqPredicateEvaluator =
-        NotEqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(notEqPredicate, FieldSpec.DataType.BYTES);
+        NotEqualsPredicateEvaluatorFactory.newRawValueBasedEvaluator(notEqPredicate, FieldSpec.DataType.BYTES, false,
+            null);
 
     Assert.assertTrue(eqPredicateEvaluator.applySV(bytesValue));
     Assert.assertFalse(neqPredicateEvaluator.applySV(bytesValue));

@@ -44,12 +44,14 @@ public abstract class BaseDataSource implements DataSource {
   private final H3IndexReader _h3Index;
   private final BloomFilterReader _bloomFilter;
   private final NullValueVectorReader _nullValueVector;
+  private final boolean _hasDictionaryWithCompression;
 
   public BaseDataSource(DataSourceMetadata dataSourceMetadata, ForwardIndexReader<?> forwardIndex,
       @Nullable Dictionary dictionary, @Nullable InvertedIndexReader<?> invertedIndex,
       @Nullable RangeIndexReader<?> rangeIndex, @Nullable TextIndexReader textIndex,
       @Nullable TextIndexReader fstIndex, @Nullable JsonIndexReader jsonIndex, @Nullable H3IndexReader h3Index,
-      @Nullable BloomFilterReader bloomFilter, @Nullable NullValueVectorReader nullValueVector) {
+      @Nullable BloomFilterReader bloomFilter, @Nullable NullValueVectorReader nullValueVector,
+      boolean hasDictionaryWithCompression) {
     _dataSourceMetadata = dataSourceMetadata;
     _forwardIndex = forwardIndex;
     _dictionary = dictionary;
@@ -61,6 +63,7 @@ public abstract class BaseDataSource implements DataSource {
     _h3Index = h3Index;
     _bloomFilter = bloomFilter;
     _nullValueVector = nullValueVector;
+    _hasDictionaryWithCompression = hasDictionaryWithCompression;
   }
 
   @Override
@@ -125,5 +128,10 @@ public abstract class BaseDataSource implements DataSource {
   @Override
   public NullValueVectorReader getNullValueVector() {
     return _nullValueVector;
+  }
+
+  @Override
+  public boolean hasDictionaryWithCompression() {
+    return _hasDictionaryWithCompression;
   }
 }

@@ -32,7 +32,8 @@ import org.apache.pinot.spi.data.FieldSpec;
 public class EmptyDataSource extends BaseDataSource {
 
   public EmptyDataSource(ColumnMetadata columnMetadata) {
-    super(new EmptyDataSourceMetadata(columnMetadata), null, null, null, null, null, null, null, null, null, null);
+    super(new EmptyDataSourceMetadata(columnMetadata), null, null, null, null, null, null, null, null, null, null,
+        false);
   }
 
   private static class EmptyDataSourceMetadata implements DataSourceMetadata {

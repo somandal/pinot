@@ -57,9 +57,15 @@ public class ExpressionFilterOperator extends BaseFilterOperator {
     }
 
     _transformFunction = TransformFunctionFactory.get(lhs, _dataSourceMap);
+    // Creation of the _transformFunction will only go through for columns with dictionary with compression enabled
+    // provided the lhs is an identifier type. Otherwise the above will throw an exception.
+    boolean hasDictionaryWithCompression = false;
+    if (lhs.getType().equals(ExpressionContext.Type.IDENTIFIER)) {
+      hasDictionaryWithCompression = _dataSourceMap.get(lhs.getIdentifier()).hasDictionaryWithCompression();
+    }
     _predicateEvaluator = PredicateEvaluatorProvider
         .getPredicateEvaluator(predicate, _transformFunction.getDictionary(),
-            _transformFunction.getResultMetadata().getDataType());
+            _transformFunction.getResultMetadata().getDataType(), hasDictionaryWithCompression);
   }
 
   @Override

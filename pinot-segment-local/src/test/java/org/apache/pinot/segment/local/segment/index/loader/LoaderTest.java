@@ -35,6 +35,7 @@ import org.apache.pinot.segment.local.segment.index.readers.StringDictionary;
 import org.apache.pinot.segment.spi.ColumnMetadata;
 import org.apache.pinot.segment.spi.IndexSegment;
 import org.apache.pinot.segment.spi.V1Constants;
+import org.apache.pinot.segment.spi.compression.ChunkCompressionType;
 import org.apache.pinot.segment.spi.creator.SegmentGeneratorConfig;
 import org.apache.pinot.segment.spi.creator.SegmentIndexCreationDriver;
 import org.apache.pinot.segment.spi.creator.SegmentVersion;
@@ -75,6 +76,7 @@ public class LoaderTest {
 
   private static final String TEXT_INDEX_COL_NAME = "column5";
   private static final String FST_INDEX_COL_NAME = "column5";
+  private static final String DICTIONARY_WITH_COMPRESSION_FORWARD_INDEX_COL_NAME = "column5";
 
   private File _avroFile;
   private File _indexDir;
@@ -657,6 +659,135 @@ public class LoaderTest {
         TEXT_INDEX_COL_NAME + V1Constants.Indexes.LUCENE_TEXT_INDEX_DOCID_MAPPING_FILE_EXTENSION);
     Assert.assertEquals(textIndexDocIdMappingFile.getParentFile().getName(),
         SegmentDirectoryPaths.V3_SUBDIRECTORY_NAME);
+    indexSegment.destroy();
+  }
+
+  private void constructSegmentWithDictionaryWithCompressionForwardIndex(SegmentVersion segmentVersion)
+      throws Exception {
+    FileUtils.deleteQuietly(INDEX_DIR);
+    SegmentGeneratorConfig segmentGeneratorConfig =
+        SegmentTestUtils.getSegmentGeneratorConfigWithoutTimeColumn(_avroFile, INDEX_DIR, "testTable");
+    SegmentIndexCreationDriver driver = SegmentCreationDriverFactory.get(null);
+    Map<String, ChunkCompressionType> dictionaryWithCompressionMap = new HashMap<>();
+    dictionaryWithCompressionMap.put(DICTIONARY_WITH_COMPRESSION_FORWARD_INDEX_COL_NAME, ChunkCompressionType.LZ4);
+    segmentGeneratorConfig.setDictionaryCompressionForwardIndexCompressionType(dictionaryWithCompressionMap);
+    segmentGeneratorConfig.setSegmentVersion(segmentVersion);
+    driver.init(segmentGeneratorConfig);
+    driver.build();
+
+    _indexDir = new File(INDEX_DIR, driver.getSegmentName());
+  }
+
+  @Test
+  public void testDictionaryWithCompressionForwardIndexLoad()
+      throws Exception {
+    // Tests for scenarios by creating on-disk segment in V3 and then loading
+    // the segment with and without specifying segmentVersion in IndexLoadingConfig
+
+    // create on-disk segment in V3
+    // this generates the segment in V1 but converts to V3 as part of post-creation processing
+    constructSegmentWithDictionaryWithCompressionForwardIndex(SegmentVersion.v3);
+
+    // check that segment on-disk version is V3 after creation
+    Assert.assertEquals(new SegmentMetadataImpl(_indexDir).getVersion(), SegmentVersion.v3);
+    // check that V3 index sub-dir exists
+    Assert.assertTrue(SegmentDirectoryPaths.segmentDirectoryFor(_indexDir, SegmentVersion.v3).exists());
+    // check that index dir is not in V1 format (the only subdir it should have is V3)
+    verifyIndexDirIsV3(_indexDir);
+
+    // CASE 1: don't set the segment version to load in IndexLoadingConfig
+    // there should be no conversion done by ImmutableSegmentLoader and it should
+    // be able to create all index readers with on-disk version V3
+    IndexLoadingConfig indexLoadingConfig = new IndexLoadingConfig();
+
+    Map<String, ChunkCompressionType> dictionaryWithCompressionMap = new HashMap<>();
+    dictionaryWithCompressionMap.put(DICTIONARY_WITH_COMPRESSION_FORWARD_INDEX_COL_NAME, ChunkCompressionType.LZ4);
+    indexLoadingConfig.setDictionaryCompressionForwardIndexCompressionType(dictionaryWithCompressionMap);
+    indexLoadingConfig.setReadMode(ReadMode.mmap);
+    IndexSegment indexSegment = ImmutableSegmentLoader.load(_indexDir, indexLoadingConfig);
+    // check that loaded segment version is v3
+    Assert.assertEquals(indexSegment.getSegmentMetadata().getVersion(), SegmentVersion.v3);
+    Assert.assertTrue(indexSegment.getSegmentMetadata()
+        .getColumnMetadataFor(DICTIONARY_WITH_COMPRESSION_FORWARD_INDEX_COL_NAME).hasDictionaryWithCompression());
+    // no change/conversion should have happened in indexDir
+    Assert.assertTrue(SegmentDirectoryPaths.segmentDirectoryFor(_indexDir, SegmentVersion.v3).exists());
+    // check that index dir is not in V1 format (the only subdir it should have is V3)
+    verifyIndexDirIsV3(_indexDir);
+    indexSegment.destroy();
+
+    // CASE 2: set the segment version to load in IndexLoadingConfig as V3
+    // there should be no conversion done by ImmutableSegmentLoader since the segmentVersionToLoad
+    // is same as the version of segment on disk (V3)
+    indexLoadingConfig.setSegmentVersion(SegmentVersion.v3);
+    indexSegment = ImmutableSegmentLoader.load(_indexDir, indexLoadingConfig);
+    // check that loaded segment version is v3
+    Assert.assertEquals(indexSegment.getSegmentMetadata().getVersion(), SegmentVersion.v3);
+    Assert.assertTrue(indexSegment.getSegmentMetadata()
+        .getColumnMetadataFor(DICTIONARY_WITH_COMPRESSION_FORWARD_INDEX_COL_NAME).hasDictionaryWithCompression());
+    // no change/conversion should have happened in indexDir
+    Assert.assertTrue(SegmentDirectoryPaths.segmentDirectoryFor(_indexDir, SegmentVersion.v3).exists());
+    // check that index dir is not in V1 format (the only subdir it should have is V3)
+    verifyIndexDirIsV3(_indexDir);
+    indexSegment.destroy();
+
+    // Test for scenarios by creating on-disk segment in V1 and then loading
+    // the segment with and without specifying segmentVersion in IndexLoadingConfig
+
+    // create on-disk segment in V1
+    // this generates the segment in V1 and does not convert to V3 as part of post-creation processing
+    constructSegmentWithDictionaryWithCompressionForwardIndex(SegmentVersion.v1);
+
+    // check that segment on-disk version is V1 after creation
+    Assert.assertEquals(new SegmentMetadataImpl(_indexDir).getVersion(), SegmentVersion.v1);
+    // check that segment v1 dir exists
+    Assert.assertTrue(SegmentDirectoryPaths.segmentDirectoryFor(_indexDir, SegmentVersion.v1).exists());
+    // check that v3 index sub-dir does not exist
+    Assert.assertFalse(SegmentDirectoryPaths.segmentDirectoryFor(_indexDir, SegmentVersion.v3).exists());
+
+    // CASE 1: don't set the segment version to load in IndexLoadingConfig
+    // there should be no conversion done by ImmutableSegmentLoader and it should
+    // be able to create all index readers with on-disk version V1
+    indexLoadingConfig = new IndexLoadingConfig();
+    dictionaryWithCompressionMap = new HashMap<>();
+    dictionaryWithCompressionMap.put(DICTIONARY_WITH_COMPRESSION_FORWARD_INDEX_COL_NAME, ChunkCompressionType.LZ4);
+    indexLoadingConfig.setDictionaryCompressionForwardIndexCompressionType(dictionaryWithCompressionMap);
+    indexLoadingConfig.setReadMode(ReadMode.mmap);
+    indexSegment = ImmutableSegmentLoader.load(_indexDir, indexLoadingConfig);
+    // check that loaded segment version is v1
+    Assert.assertEquals(indexSegment.getSegmentMetadata().getVersion(), SegmentVersion.v1);
+    Assert.assertTrue(indexSegment.getSegmentMetadata()
+        .getColumnMetadataFor(DICTIONARY_WITH_COMPRESSION_FORWARD_INDEX_COL_NAME).hasDictionaryWithCompression());
+    // no change/conversion should have happened in indexDir
+    Assert.assertTrue(SegmentDirectoryPaths.segmentDirectoryFor(_indexDir, SegmentVersion.v1).exists());
+    Assert.assertFalse(SegmentDirectoryPaths.segmentDirectoryFor(_indexDir, SegmentVersion.v3).exists());
+    indexSegment.destroy();
+
+    // CASE 2: set the segment version to load in IndexLoadingConfig to V1
+    // there should be no conversion done by ImmutableSegmentLoader since the segmentVersionToLoad
+    // is same as the version of segment on fisk
+    indexLoadingConfig.setSegmentVersion(SegmentVersion.v1);
+    indexSegment = ImmutableSegmentLoader.load(_indexDir, indexLoadingConfig);
+    // check that loaded segment version is v1
+    Assert.assertEquals(indexSegment.getSegmentMetadata().getVersion(), SegmentVersion.v1);
+    Assert.assertTrue(indexSegment.getSegmentMetadata()
+        .getColumnMetadataFor(DICTIONARY_WITH_COMPRESSION_FORWARD_INDEX_COL_NAME).hasDictionaryWithCompression());
+    // no change/conversion should have happened in indexDir
+    Assert.assertTrue(SegmentDirectoryPaths.segmentDirectoryFor(_indexDir, SegmentVersion.v1).exists());
+    Assert.assertFalse(SegmentDirectoryPaths.segmentDirectoryFor(_indexDir, SegmentVersion.v3).exists());
+    indexSegment.destroy();
+
+    // CASE 3: set the segment version to load in IndexLoadingConfig to V3
+    // there should be conversion done by ImmutableSegmentLoader since the segmentVersionToLoad
+    // is different than the version of segment on disk
+    indexLoadingConfig.setSegmentVersion(SegmentVersion.v3);
+    indexSegment = ImmutableSegmentLoader.load(_indexDir, indexLoadingConfig);
+    // check that loaded segment version is v3
+    Assert.assertEquals(indexSegment.getSegmentMetadata().getVersion(), SegmentVersion.v3);
+    Assert.assertTrue(indexSegment.getSegmentMetadata()
+        .getColumnMetadataFor(DICTIONARY_WITH_COMPRESSION_FORWARD_INDEX_COL_NAME).hasDictionaryWithCompression());
+    // the index dir should exist in v3 format due to conversion
+    Assert.assertTrue(SegmentDirectoryPaths.segmentDirectoryFor(_indexDir, SegmentVersion.v3).exists());
+    verifyIndexDirIsV3(_indexDir);
     indexSegment.destroy();
   }
 

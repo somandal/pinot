@@ -85,4 +85,9 @@ public interface ColumnIndexContainer extends Closeable {
    * @return
    */
   NullValueVectorReader getNullValueVector();
+
+  /**
+   * Returns whether dictionary with compression is enabled for this column or not
+   */
+  boolean hasDictionaryWithCompression();
 }

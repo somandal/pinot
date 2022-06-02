@@ -23,9 +23,13 @@ import org.apache.pinot.common.request.context.predicate.Predicate;
 
 
 public abstract class BaseRawValueBasedPredicateEvaluator extends BasePredicateEvaluator {
+  protected boolean _alwaysTrue;
+  protected boolean _alwaysFalse;
 
   protected BaseRawValueBasedPredicateEvaluator(Predicate predicate) {
     super(predicate);
+    _alwaysTrue = false;
+    _alwaysFalse = false;
   }
 
   @Override
@@ -35,12 +39,12 @@ public abstract class BaseRawValueBasedPredicateEvaluator extends BasePredicateE
 
   @Override
   public final boolean isAlwaysTrue() {
-    return false;
+    return _alwaysTrue;
   }
 
   @Override
   public final boolean isAlwaysFalse() {
-    return false;
+    return _alwaysFalse;
   }
 
   @Override

@@ -32,6 +32,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import javax.annotation.Nullable;
 import org.apache.pinot.common.request.context.predicate.NotInPredicate;
 import org.apache.pinot.common.utils.HashUtil;
 import org.apache.pinot.segment.spi.index.reader.Dictionary;
@@ -64,10 +65,12 @@ public class NotInPredicateEvaluatorFactory {
    *
    * @param notInPredicate NOT_IN predicate to evaluate
    * @param dataType Data type for the column
+   * @param hasDictionaryWithCompression whether dictionary with compression is enabled
+   * @param dictionary for the column
    * @return Raw value based NOT_IN predicate evaluator
    */
   public static BaseRawValueBasedPredicateEvaluator newRawValueBasedEvaluator(NotInPredicate notInPredicate,
-      DataType dataType) {
+      DataType dataType, boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
     switch (dataType) {
       case INT: {
         int[] intValues = notInPredicate.getIntValues();
@@ -75,7 +78,8 @@ public class NotInPredicateEvaluatorFactory {
         for (int value : intValues) {
           nonMatchingValues.add(value);
         }
-        return new IntRawValueBasedNotInPredicateEvaluator(notInPredicate, nonMatchingValues);
+        return new IntRawValueBasedNotInPredicateEvaluator(notInPredicate, nonMatchingValues,
+            hasDictionaryWithCompression, dictionary);
       }
       case LONG: {
         long[] longValues = notInPredicate.getLongValues();
@@ -83,7 +87,8 @@ public class NotInPredicateEvaluatorFactory {
         for (long value : longValues) {
           nonMatchingValues.add(value);
         }
-        return new LongRawValueBasedNotInPredicateEvaluator(notInPredicate, nonMatchingValues);
+        return new LongRawValueBasedNotInPredicateEvaluator(notInPredicate, nonMatchingValues,
+            hasDictionaryWithCompression, dictionary);
       }
       case FLOAT: {
         float[] floatValues = notInPredicate.getFloatValues();
@@ -91,7 +96,8 @@ public class NotInPredicateEvaluatorFactory {
         for (float value : floatValues) {
           nonMatchingValues.add(value);
         }
-        return new FloatRawValueBasedNotInPredicateEvaluator(notInPredicate, nonMatchingValues);
+        return new FloatRawValueBasedNotInPredicateEvaluator(notInPredicate, nonMatchingValues,
+            hasDictionaryWithCompression, dictionary);
       }
       case DOUBLE: {
         double[] doubleValues = notInPredicate.getDoubleValues();
@@ -99,14 +105,16 @@ public class NotInPredicateEvaluatorFactory {
         for (double value : doubleValues) {
           nonMatchingValues.add(value);
         }
-        return new DoubleRawValueBasedNotInPredicateEvaluator(notInPredicate, nonMatchingValues);
+        return new DoubleRawValueBasedNotInPredicateEvaluator(notInPredicate, nonMatchingValues,
+            hasDictionaryWithCompression, dictionary);
       }
       case BIG_DECIMAL: {
         BigDecimal[] bigDecimalValues = notInPredicate.getBigDecimalValues();
         // NOTE: Use TreeSet because BigDecimal's compareTo() is not consistent with equals()
         //       E.g. compareTo(3.0, 3) returns 0 but equals(3.0, 3) returns false
         TreeSet<BigDecimal> nonMatchingValues = new TreeSet<>(Arrays.asList(bigDecimalValues));
-        return new BigDecimalRawValueBasedNotInPredicateEvaluator(notInPredicate, nonMatchingValues);
+        return new BigDecimalRawValueBasedNotInPredicateEvaluator(notInPredicate, nonMatchingValues,
+            hasDictionaryWithCompression, dictionary);
       }
       case BOOLEAN: {
         int[] booleanValues = notInPredicate.getBooleanValues();
@@ -114,7 +122,8 @@ public class NotInPredicateEvaluatorFactory {
         for (int value : booleanValues) {
           nonMatchingValues.add(value);
         }
-        return new IntRawValueBasedNotInPredicateEvaluator(notInPredicate, nonMatchingValues);
+        return new IntRawValueBasedNotInPredicateEvaluator(notInPredicate, nonMatchingValues,
+            hasDictionaryWithCompression, dictionary);
       }
       case TIMESTAMP: {
         long[] timestampValues = notInPredicate.getTimestampValues();
@@ -122,7 +131,8 @@ public class NotInPredicateEvaluatorFactory {
         for (long value : timestampValues) {
           nonMatchingValues.add(value);
         }
-        return new LongRawValueBasedNotInPredicateEvaluator(notInPredicate, nonMatchingValues);
+        return new LongRawValueBasedNotInPredicateEvaluator(notInPredicate, nonMatchingValues,
+            hasDictionaryWithCompression, dictionary);
       }
       case STRING: {
         List<String> stringValues = notInPredicate.getValues();
@@ -132,7 +142,8 @@ public class NotInPredicateEvaluatorFactory {
           //noinspection UseBulkOperation
           nonMatchingValues.add(value);
         }
-        return new StringRawValueBasedNotInPredicateEvaluator(notInPredicate, nonMatchingValues);
+        return new StringRawValueBasedNotInPredicateEvaluator(notInPredicate, nonMatchingValues,
+            hasDictionaryWithCompression, dictionary);
       }
       case BYTES: {
         ByteArray[] bytesValues = notInPredicate.getBytesValues();
@@ -143,7 +154,8 @@ public class NotInPredicateEvaluatorFactory {
           //noinspection UseBulkOperation
           nonMatchingValues.add(value);
         }
-        return new BytesRawValueBasedNotInPredicateEvaluator(notInPredicate, nonMatchingValues);
+        return new BytesRawValueBasedNotInPredicateEvaluator(notInPredicate, nonMatchingValues,
+            hasDictionaryWithCompression, dictionary);
       }
       default:
         throw new IllegalStateException("Unsupported data type: " + dataType);
@@ -219,9 +231,20 @@ public class NotInPredicateEvaluatorFactory {
   private static final class IntRawValueBasedNotInPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final IntSet _nonMatchingValues;
 
-    IntRawValueBasedNotInPredicateEvaluator(NotInPredicate notInPredicate, IntSet nonMatchingValues) {
+    IntRawValueBasedNotInPredicateEvaluator(NotInPredicate notInPredicate, IntSet nonMatchingValues,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(notInPredicate);
       _nonMatchingValues = nonMatchingValues;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        IntSet nonMatchingDictIdSet = PredicateUtils.getDictIdSet(notInPredicate, dictionary, DataType.INT);
+        int numNonMatchingDictIds = nonMatchingDictIdSet.size();
+        if (numNonMatchingDictIds == 0) {
+          _alwaysTrue = true;
+        } else if (dictionary.length() == numNonMatchingDictIds) {
+          _alwaysFalse = true;
+        }
+      }
     }
 
     @Override
@@ -251,9 +274,20 @@ public class NotInPredicateEvaluatorFactory {
   private static final class LongRawValueBasedNotInPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final LongSet _nonMatchingValues;
 
-    LongRawValueBasedNotInPredicateEvaluator(NotInPredicate notInPredicate, LongSet nonMatchingValues) {
+    LongRawValueBasedNotInPredicateEvaluator(NotInPredicate notInPredicate, LongSet nonMatchingValues,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(notInPredicate);
       _nonMatchingValues = nonMatchingValues;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        IntSet nonMatchingDictIdSet = PredicateUtils.getDictIdSet(notInPredicate, dictionary, DataType.LONG);
+        int numNonMatchingDictIds = nonMatchingDictIdSet.size();
+        if (numNonMatchingDictIds == 0) {
+          _alwaysTrue = true;
+        } else if (dictionary.length() == numNonMatchingDictIds) {
+          _alwaysFalse = true;
+        }
+      }
     }
 
     @Override
@@ -283,9 +317,20 @@ public class NotInPredicateEvaluatorFactory {
   private static final class FloatRawValueBasedNotInPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final FloatSet _nonMatchingValues;
 
-    FloatRawValueBasedNotInPredicateEvaluator(NotInPredicate notInPredicate, FloatSet nonMatchingValues) {
+    FloatRawValueBasedNotInPredicateEvaluator(NotInPredicate notInPredicate, FloatSet nonMatchingValues,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(notInPredicate);
       _nonMatchingValues = nonMatchingValues;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        IntSet nonMatchingDictIdSet = PredicateUtils.getDictIdSet(notInPredicate, dictionary, DataType.FLOAT);
+        int numNonMatchingDictIds = nonMatchingDictIdSet.size();
+        if (numNonMatchingDictIds == 0) {
+          _alwaysTrue = true;
+        } else if (dictionary.length() == numNonMatchingDictIds) {
+          _alwaysFalse = true;
+        }
+      }
     }
 
     @Override
@@ -315,9 +360,20 @@ public class NotInPredicateEvaluatorFactory {
   private static final class DoubleRawValueBasedNotInPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final DoubleSet _nonMatchingValues;
 
-    DoubleRawValueBasedNotInPredicateEvaluator(NotInPredicate notInPredicate, DoubleSet nonMatchingValues) {
+    DoubleRawValueBasedNotInPredicateEvaluator(NotInPredicate notInPredicate, DoubleSet nonMatchingValues,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(notInPredicate);
       _nonMatchingValues = nonMatchingValues;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        IntSet nonMatchingDictIdSet = PredicateUtils.getDictIdSet(notInPredicate, dictionary, DataType.DOUBLE);
+        int numNonMatchingDictIds = nonMatchingDictIdSet.size();
+        if (numNonMatchingDictIds == 0) {
+          _alwaysTrue = true;
+        } else if (dictionary.length() == numNonMatchingDictIds) {
+          _alwaysFalse = true;
+        }
+      }
     }
 
     @Override
@@ -349,10 +405,20 @@ public class NotInPredicateEvaluatorFactory {
     // See: BigDecimalRawValueBasedInPredicateEvaluator.
     final TreeSet<BigDecimal> _nonMatchingValues;
 
-    BigDecimalRawValueBasedNotInPredicateEvaluator(NotInPredicate notInPredicate,
-        TreeSet<BigDecimal> nonMatchingValues) {
+    BigDecimalRawValueBasedNotInPredicateEvaluator(NotInPredicate notInPredicate, TreeSet<BigDecimal> nonMatchingValues,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(notInPredicate);
       _nonMatchingValues = nonMatchingValues;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        IntSet nonMatchingDictIdSet = PredicateUtils.getDictIdSet(notInPredicate, dictionary, DataType.BIG_DECIMAL);
+        int numNonMatchingDictIds = nonMatchingDictIdSet.size();
+        if (numNonMatchingDictIds == 0) {
+          _alwaysTrue = true;
+        } else if (dictionary.length() == numNonMatchingDictIds) {
+          _alwaysFalse = true;
+        }
+      }
     }
 
     @Override
@@ -369,9 +435,20 @@ public class NotInPredicateEvaluatorFactory {
   private static final class StringRawValueBasedNotInPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final Set<String> _nonMatchingValues;
 
-    StringRawValueBasedNotInPredicateEvaluator(NotInPredicate notInPredicate, Set<String> nonMatchingValues) {
+    StringRawValueBasedNotInPredicateEvaluator(NotInPredicate notInPredicate, Set<String> nonMatchingValues,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(notInPredicate);
       _nonMatchingValues = nonMatchingValues;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        IntSet nonMatchingDictIdSet = PredicateUtils.getDictIdSet(notInPredicate, dictionary, DataType.STRING);
+        int numNonMatchingDictIds = nonMatchingDictIdSet.size();
+        if (numNonMatchingDictIds == 0) {
+          _alwaysTrue = true;
+        } else if (dictionary.length() == numNonMatchingDictIds) {
+          _alwaysFalse = true;
+        }
+      }
     }
 
     @Override
@@ -388,9 +465,20 @@ public class NotInPredicateEvaluatorFactory {
   private static final class BytesRawValueBasedNotInPredicateEvaluator extends BaseRawValueBasedPredicateEvaluator {
     final Set<ByteArray> _nonMatchingValues;
 
-    BytesRawValueBasedNotInPredicateEvaluator(NotInPredicate notInPredicate, Set<ByteArray> nonMatchingValues) {
+    BytesRawValueBasedNotInPredicateEvaluator(NotInPredicate notInPredicate, Set<ByteArray> nonMatchingValues,
+        boolean hasDictionaryWithCompression, @Nullable Dictionary dictionary) {
       super(notInPredicate);
       _nonMatchingValues = nonMatchingValues;
+
+      if (hasDictionaryWithCompression && dictionary != null) {
+        IntSet nonMatchingDictIdSet = PredicateUtils.getDictIdSet(notInPredicate, dictionary, DataType.BYTES);
+        int numNonMatchingDictIds = nonMatchingDictIdSet.size();
+        if (numNonMatchingDictIds == 0) {
+          _alwaysTrue = true;
+        } else if (dictionary.length() == numNonMatchingDictIds) {
+          _alwaysFalse = true;
+        }
+      }
     }
 
     @Override

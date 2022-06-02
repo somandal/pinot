@@ -394,6 +394,6 @@ public class NoDictionaryRangePredicateEvaluatorTest {
 
   private PredicateEvaluator buildRangePredicate(String rangeString, FieldSpec.DataType dataType) {
     RangePredicate predicate = new RangePredicate(COLUMN_EXPRESSION, rangeString);
-    return RangePredicateEvaluatorFactory.newRawValueBasedEvaluator(predicate, dataType);
+    return RangePredicateEvaluatorFactory.newRawValueBasedEvaluator(predicate, dataType, false, null);
   }
 }

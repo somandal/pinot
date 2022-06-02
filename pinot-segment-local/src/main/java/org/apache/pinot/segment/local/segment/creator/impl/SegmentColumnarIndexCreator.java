@@ -196,6 +196,10 @@ public class SegmentColumnarIndexCreator implements SegmentCreator {
       Preconditions.checkState(dictEnabledColumn || !invertedIndexColumns.contains(columnName),
           "Cannot create inverted index for raw index column: %s", columnName);
 
+      // Check if dictionary is enabled with general compression for the given column
+      boolean hasDictionaryWithCompression = _config.getDictionaryCompressionForwardIndexCompressionType()
+          .containsKey(columnName);
+
       IndexCreationContext.Common context = IndexCreationContext.builder()
           .withIndexDir(_indexDir)
           .withCardinality(columnIndexCreationInfo.getDistinctValueCount())
@@ -206,12 +210,15 @@ public class SegmentColumnarIndexCreator implements SegmentCreator {
           .withMaxValue((Comparable<?>) columnIndexCreationInfo.getMax())
           .withTotalNumberOfEntries(columnIndexCreationInfo.getTotalNumberOfEntries())
           .withColumnIndexCreationInfo(columnIndexCreationInfo)
+          .withDictionaryWithCompression(hasDictionaryWithCompression)
           .sorted(columnIndexCreationInfo.isSorted())
           .onHeap(segmentCreationSpec.isOnHeap())
           .build();
       // Initialize forward index creator
       ChunkCompressionType chunkCompressionType =
-          dictEnabledColumn ? null : getColumnCompressionType(segmentCreationSpec, fieldSpec);
+          dictEnabledColumn ? (hasDictionaryWithCompression ? _config
+              .getDictionaryCompressionForwardIndexCompressionType().get(columnName) : null)
+              : getColumnCompressionType(segmentCreationSpec, fieldSpec);
       _forwardIndexCreatorMap.put(columnName, _indexCreatorProvider.newForwardIndexCreator(
           context.forForwardIndex(chunkCompressionType, segmentCreationSpec.getColumnProperties())));
 
@@ -220,7 +227,7 @@ public class SegmentColumnarIndexCreator implements SegmentCreator {
         _invertedIndexCreatorMap.put(columnName,
             _indexCreatorProvider.newInvertedIndexCreator(context.forInvertedIndex()));
       }
-      if (dictEnabledColumn) {
+      if (dictEnabledColumn || hasDictionaryWithCompression) {
         // Create dictionary-encoded index
         // Initialize dictionary creator
         // TODO: Dictionary creator holds all unique values on heap. Consider keeping dictionary instead of creator
@@ -381,8 +388,13 @@ public class SegmentColumnarIndexCreator implements SegmentCreator {
 
       FieldSpec fieldSpec = _schema.getFieldSpecFor(columnName);
 
-      //get dictionaryCreator, will be null if column is not dictionaryEncoded
+      // get dictionaryCreator, will be null if column is not dictionaryEncoded and if forward index dictionary with
+      // compression isn't enabled
       SegmentDictionaryCreator dictionaryCreator = _dictionaryCreatorMap.get(columnName);
+
+      // Check if dictionary is enabled with general compression for the given column
+      boolean hasDictionaryWithCompression = _config.getDictionaryCompressionForwardIndexCompressionType()
+          .containsKey(columnName);
 
       // bloom filter
       BloomFilterCreator bloomFilterCreator = _bloomFilterCreatorMap.get(columnName);
@@ -494,20 +506,26 @@ public class SegmentColumnarIndexCreator implements SegmentCreator {
         if (h3IndexCreator != null) {
           h3IndexCreator.add(GeometrySerializer.deserialize((byte[]) columnValueToIndex));
         }
+
+        int dictId = -1;
         if (dictionaryCreator != null) {
-          // dictionary encoded SV column
+          // Update the dictId for the inverted index if dictionaryCreator is present. This should be done irrespective
+          // of whether compression is enabled or not for the dictionary enabled forward index
           // get dictID from dictionary
-          int dictId = dictionaryCreator.indexOfSV(columnValueToIndex);
-          // store the docID -> dictID mapping in forward index
-          forwardIndexCreator.putDictId(dictId);
+          dictId = dictionaryCreator.indexOfSV(columnValueToIndex);
           DictionaryBasedInvertedIndexCreator invertedIndexCreator = _invertedIndexCreatorMap.get(columnName);
           if (invertedIndexCreator != null) {
             // if inverted index enabled during segment creation,
             // then store dictID -> docID mapping in inverted index
             invertedIndexCreator.add(dictId);
           }
+        }
+        if (dictionaryCreator != null && !hasDictionaryWithCompression) {
+          // dictionary encoded SV column without compression enabled
+          // store the docID -> dictID mapping in forward index
+          forwardIndexCreator.putDictId(dictId);
         } else {
-          // non-dictionary encoded SV column
+          // non-dictionary encoded SV column or dictionary encoded SV column with compression enabled
           // store the docId -> raw value mapping in forward index
           if (textIndexCreator != null && !shouldStoreRawValueForTextIndex(columnName)) {
             // for text index on raw columns, check the config to determine if actual raw value should
@@ -551,15 +569,22 @@ public class SegmentColumnarIndexCreator implements SegmentCreator {
           }
         }
       } else {
+        int[] dictIds = {};
         if (dictionaryCreator != null) {
-          //dictionary encoded
-          int[] dictIds = dictionaryCreator.indexOfMV(columnValueToIndex);
-          forwardIndexCreator.putDictIdMV(dictIds);
+          // Update the dictIds for the inverted index if dictionaryCreator is present. This should be done irrespective
+          // of whether compression is enabled or not for the dictionary enabled forward index
+          // get dictIDs from dictionary
+          dictIds = dictionaryCreator.indexOfMV(columnValueToIndex);
           DictionaryBasedInvertedIndexCreator invertedIndexCreator = _invertedIndexCreatorMap.get(columnName);
           if (invertedIndexCreator != null) {
             invertedIndexCreator.add(dictIds, dictIds.length);
           }
+        }
+        if (dictionaryCreator != null && !hasDictionaryWithCompression) {
+          // dictionary encoded MV column with compression disabled
+          forwardIndexCreator.putDictIdMV(dictIds);
         } else {
+          // non-dictionary encoded MV column or dictionary encoded MV column with compression enabled
           // for text index on raw columns, check the config to determine if actual raw value should
           // be stored or not
           if (textIndexCreator != null && !shouldStoreRawValueForTextIndex(columnName)) {
@@ -782,8 +807,10 @@ public class SegmentColumnarIndexCreator implements SegmentCreator {
       ColumnIndexCreationInfo columnIndexCreationInfo = entry.getValue();
       SegmentDictionaryCreator dictionaryCreator = _dictionaryCreatorMap.get(column);
       int dictionaryElementSize = (dictionaryCreator != null) ? dictionaryCreator.getNumBytesPerEntry() : 0;
+      boolean hasDictionaryWithCompression = _config.getDictionaryCompressionForwardIndexCompressionType()
+          .containsKey(column);
       addColumnMetadataInfo(properties, column, columnIndexCreationInfo, _totalDocs, _schema.getFieldSpecFor(column),
-          dictionaryCreator != null, dictionaryElementSize);
+          dictionaryCreator != null, dictionaryElementSize, hasDictionaryWithCompression);
     }
 
     SegmentZKPropsConfig segmentZKPropsConfig = _config.getSegmentZKPropsConfig();
@@ -797,7 +824,7 @@ public class SegmentColumnarIndexCreator implements SegmentCreator {
 
   public static void addColumnMetadataInfo(PropertiesConfiguration properties, String column,
       ColumnIndexCreationInfo columnIndexCreationInfo, int totalDocs, FieldSpec fieldSpec, boolean hasDictionary,
-      int dictionaryElementSize) {
+      int dictionaryElementSize, boolean hasDictionaryWithCompression) {
     int cardinality = columnIndexCreationInfo.getDistinctValueCount();
     properties.setProperty(getKeyFor(column, CARDINALITY), String.valueOf(cardinality));
     properties.setProperty(getKeyFor(column, TOTAL_DOCS), String.valueOf(totalDocs));
@@ -816,6 +843,8 @@ public class SegmentColumnarIndexCreator implements SegmentCreator {
         String.valueOf(columnIndexCreationInfo.getTotalNumberOfEntries()));
     properties.setProperty(getKeyFor(column, IS_AUTO_GENERATED),
         String.valueOf(columnIndexCreationInfo.isAutoGenerated()));
+    properties.setProperty(getKeyFor(column, HAS_DICTIONARY_WITH_COMPRESSION),
+        String.valueOf(hasDictionaryWithCompression));
 
     PartitionFunction partitionFunction = columnIndexCreationInfo.getPartitionFunction();
     if (partitionFunction != null) {
