@@ -25,9 +25,11 @@ import java.util.Map;
 import java.util.Objects;
 import org.apache.pinot.segment.local.io.writer.impl.BaseChunkSVForwardIndexWriter;
 import org.apache.pinot.segment.local.segment.creator.impl.bloom.OnHeapGuavaBloomFilterCreator;
+import org.apache.pinot.segment.local.segment.creator.impl.fwd.MultiValueDictionaryRawIndexCreator;
 import org.apache.pinot.segment.local.segment.creator.impl.fwd.MultiValueFixedByteRawIndexCreator;
 import org.apache.pinot.segment.local.segment.creator.impl.fwd.MultiValueUnsortedForwardIndexCreator;
 import org.apache.pinot.segment.local.segment.creator.impl.fwd.MultiValueVarByteRawIndexCreator;
+import org.apache.pinot.segment.local.segment.creator.impl.fwd.SingleValueDictionaryRawIndexCreator;
 import org.apache.pinot.segment.local.segment.creator.impl.fwd.SingleValueFixedByteRawIndexCreator;
 import org.apache.pinot.segment.local.segment.creator.impl.fwd.SingleValueSortedForwardIndexCreator;
 import org.apache.pinot.segment.local.segment.creator.impl.fwd.SingleValueUnsortedForwardIndexCreator;
@@ -72,10 +74,22 @@ public final class DefaultIndexCreatorProvider implements IndexCreatorProvider {
   @Override
   public ForwardIndexCreator newForwardIndexCreator(IndexCreationContext.Forward context)
       throws Exception {
-    if (!context.hasDictionary()) {
+    // TODO: wire in actual dictionary with compression flag
+    boolean hasDictonaryWithCompressionFwdIndex = false;
+    if (!context.hasDictionary() || hasDictonaryWithCompressionFwdIndex) {
       boolean deriveNumDocsPerChunk =
           shouldDeriveNumDocsPerChunk(context.getFieldSpec().getName(), context.getColumnProperties());
       int writerVersion = getRawIndexWriterVersion(context.getFieldSpec().getName(), context.getColumnProperties());
+      if (hasDictonaryWithCompressionFwdIndex) {
+        if (context.getFieldSpec().isSingleValueField()) {
+          return getDictionaryIdRawIndexCreatorForSVColumn(context.getIndexDir(), context.getChunkCompressionType(),
+              context.getFieldSpec().getName(), context.getTotalDocs(), writerVersion);
+        } else {
+          return getDictionaryIdRawIndexCreatorForMVColumn(context.getIndexDir(), context.getChunkCompressionType(),
+              context.getFieldSpec().getName(), context.getTotalDocs(), context.getMaxNumberOfMultiValueElements(),
+              deriveNumDocsPerChunk, writerVersion);
+        }
+      }
       if (context.getFieldSpec().isSingleValueField()) {
         return getRawIndexCreatorForSVColumn(context.getIndexDir(), context.getChunkCompressionType(),
             context.getFieldSpec().getName(), context.getFieldSpec().getDataType().getStoredType(),
@@ -252,6 +266,44 @@ public final class DefaultIndexCreatorProvider implements IndexCreatorProvider {
       default:
         throw new UnsupportedOperationException("Data type not supported for raw indexing: " + dataType);
     }
+  }
+
+  /**
+   * Helper method to build the dictionary ID raw index
+   * creator for the column.
+   * Assumes that column to be indexed is multi-valued.
+   *
+   * @param file Output index file
+   * @param column Column name
+   * @param totalDocs Total number of documents to index
+   * @param deriveNumDocsPerChunk true if varbyte writer should auto-derive the number of rows
+   *     per chunk
+   * @param writerVersion version to use for the raw index writer
+   * @return raw index creator
+   */
+  public static ForwardIndexCreator getDictionaryIdRawIndexCreatorForMVColumn(File file,
+      ChunkCompressionType compressionType, String column, final int totalDocs,
+      int maxNumberOfMultiValueElements, boolean deriveNumDocsPerChunk, int writerVersion)
+      throws IOException {
+    return new MultiValueDictionaryRawIndexCreator(file, compressionType, column, totalDocs,
+        maxNumberOfMultiValueElements, deriveNumDocsPerChunk, writerVersion);
+  }
+
+  /**
+   * Helper method to build the dictionary ID raw index
+   * creator for the column.
+   * Assumes that column to be indexed is single valued.
+   *
+   * @param file Output index file
+   * @param column Column name
+   * @param totalDocs Total number of documents to index
+   * @param writerVersion version to use for the raw index writer
+   * @return raw index creator
+   */
+  public static ForwardIndexCreator getDictionaryIdRawIndexCreatorForSVColumn(File file,
+      ChunkCompressionType compressionType, String column, int totalDocs, int writerVersion)
+      throws IOException {
+    return new SingleValueDictionaryRawIndexCreator(file, compressionType, column, totalDocs, writerVersion);
   }
 
   @Override
