@@ -70,6 +70,14 @@ public class QueryEnvironmentTestBase {
   @DataProvider(name = "testQueryDataProvider")
   protected Object[][] provideQueries() {
     return new Object[][] {
+        new Object[]{"SELECT a.col1, SUM(a.col3) OVER (PARTITION BY a.col2 ORDER BY a.col1), "
+            + "COUNT(a.col3) OVER (PARTITION BY a.col2 ORDER BY a.col1) FROM a WHERE a.col3 >= 0 AND a.col2 = 'a'"},
+        new Object[]{"SELECT a.col1, b.col1, SUM(a.col3) OVER (PARTITION BY a.col1) FROM a JOIN b ON a.col1 = b.col2"},
+        new Object[]{"SELECT a.col1, SUM(a.col3) FROM a GROUP BY a.col1"},
+        new Object[]{"SELECT a.col1 FROM a ORDER BY a.col1"},
+        new Object[]{"SELECT SUM(a.col3), COUNT(a.col1) FROM a"},
+        new Object[]{"SELECT a.col1, a.ts, b.col3 FROM a JOIN b ON a.col1 = b.col2 ORDER BY a.col1"},
+        new Object[]{"SELECT a.col1, SUM(a.col3) OVER (PARTITION BY a.col2 ROWS 5 PRECEDING) FROM a"},
         new Object[]{"SELECT * FROM a ORDER BY col1 LIMIT 10"},
         new Object[]{"SELECT * FROM b ORDER BY col1, col2 DESC LIMIT 10"},
         new Object[]{"SELECT * FROM d"},
@@ -96,6 +104,20 @@ public class QueryEnvironmentTestBase {
             + " WHERE a.col3 >= 0 GROUP BY a.col2, a.col3"},
         new Object[]{"SELECT a.col1, b.col2 FROM a JOIN b ON a.col1 = b.col1 WHERE a.col2 IN ('foo', 'bar') AND"
             + " b.col2 NOT IN ('alice', 'charlie')"},
+        new Object[]{"SELECT a.col1, SUM(a.col3) OVER () FROM a"},
+        new Object[]{"SELECT a.col1, SUM(a.col3) OVER (PARTITION BY a.col2) FROM a"},
+        new Object[]{"SELECT a.col1, SUM(a.col3) OVER (PARTITION BY a.col2 ORDER BY a.col2) FROM a"},
+        new Object[]{"SELECT a.col1, AVG(a.col3) OVER (), SUM(a.col3) OVER () FROM a"},
+        new Object[]{"SELECT a.col1, SUM(a.col3) OVER () FROM a WHERE a.col3 >= 0"},
+        new Object[]{"SELECT a.col1, SUM(a.col3) OVER (PARTITION BY a.col2), MIN(a.col3) OVER (PARTITION BY a.col2) "
+            + "FROM a"},
+        // new Object[]{"SELECT a.col1, SUM(a.col3) OVER (PARTITION BY a.col2), MIN(a.col3) OVER (PARTITION BY a.col1) "
+        //     + "FROM a"}, // Should fail as separate window groups due to different partition keys
+        new Object[]{"SELECT a.col1, SUM(a.col3) OVER (PARTITION BY a.col2 ROWS 5 PRECEDING) FROM a"},
+        new Object[]{"SELECT a.col1, SUM(a.col3) OVER (PARTITION BY a.col2, a.col1) FROM a"},
+        new Object[]{"SELECT a.col1, SUM(a.col3) OVER (ORDER BY a.col2, a.col1), MIN(a.col3) OVER (ORDER BY a.col2, "
+            + "a.col1) FROM a"},
+        new Object[]{"SELECT a.col1, SUM(a.col3) OVER (ORDER BY a.col2), MIN(a.col3) OVER (ORDER BY a.col2) FROM a"},
     };
   }
 
