@@ -67,8 +67,9 @@ public class PhysicalPlanVisitor implements StageNodeVisitor<MultiStageOperator,
     List<VirtualServer> sendingInstances = context.getMetadataMap().get(node.getSenderStageId()).getServerInstances();
     MailboxReceiveOperator mailboxReceiveOperator =
         new MailboxReceiveOperator(context.getMailboxService(), sendingInstances,
-            node.getExchangeType(), context.getServer(),
-            context.getRequestId(), node.getSenderStageId(), node.getStageId(), context.getTimeoutMs());
+            node.getExchangeType(), node.getCollationKeys(), node.getCollationDirections(), node.getDataSchema(),
+            context.getServer(), context.getRequestId(), node.getSenderStageId(), node.getStageId(),
+            context.getTimeoutMs());
     context.addReceivingMailboxes(mailboxReceiveOperator.getSendingMailbox());
     return mailboxReceiveOperator;
   }
@@ -124,8 +125,11 @@ public class PhysicalPlanVisitor implements StageNodeVisitor<MultiStageOperator,
   @Override
   public MultiStageOperator visitSort(SortNode node, PlanRequestContext context) {
     MultiStageOperator nextOperator = node.getInputs().get(0).visit(this, context);
+    boolean isInputSorted =
+        nextOperator instanceof MailboxReceiveOperator && ((MailboxReceiveOperator) nextOperator).hasCollationKeys();
     return new SortOperator(nextOperator, node.getCollationKeys(), node.getCollationDirections(), node.getFetch(),
-        node.getOffset(), node.getDataSchema(), context.getRequestId(), context.getStageId(), context.getServer());
+        node.getOffset(), node.getDataSchema(), context.getRequestId(), context.getStageId(), context.getServer(),
+        isInputSorted);
   }
 
   @Override

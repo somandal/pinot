@@ -21,6 +21,7 @@ package org.apache.pinot.query.service.dispatch;
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.Deadline;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -250,7 +251,8 @@ public class QueryDispatcher {
     // timeout is set for reduce stage
     MailboxReceiveOperator mailboxReceiveOperator =
         new MailboxReceiveOperator(mailboxService, sendingInstances,
-            RelDistribution.Type.RANDOM_DISTRIBUTED, server, jobId, stageId, reducerStageId, timeoutMs);
+            RelDistribution.Type.RANDOM_DISTRIBUTED, Collections.emptyList(), Collections.emptyList(), dataSchema,
+            server, jobId, stageId, reducerStageId, timeoutMs);
     return mailboxReceiveOperator;
   }
 

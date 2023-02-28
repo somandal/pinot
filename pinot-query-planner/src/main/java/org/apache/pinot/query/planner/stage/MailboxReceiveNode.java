@@ -18,9 +18,15 @@
  */
 package org.apache.pinot.query.planner.stage;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import javax.annotation.Nullable;
 import org.apache.calcite.rel.RelDistribution;
+import org.apache.calcite.rel.RelFieldCollation;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.pinot.common.utils.DataSchema;
+import org.apache.pinot.query.planner.logical.RexExpression;
 import org.apache.pinot.query.planner.partitioning.KeySelector;
 import org.apache.pinot.query.planner.serde.ProtoProperties;
 
@@ -32,6 +38,10 @@ public class MailboxReceiveNode extends AbstractStageNode {
   private RelDistribution.Type _exchangeType;
   @ProtoProperties
   private KeySelector<Object[], Object[]> _partitionKeySelector;
+  @ProtoProperties
+  private List<RexExpression> _collationKeys;
+  @ProtoProperties
+  private List<RelFieldCollation.Direction> _collationDirections;
 
   // this is only available during planning and should not be relied
   // on in any post-serialization code
@@ -43,11 +53,22 @@ public class MailboxReceiveNode extends AbstractStageNode {
 
   public MailboxReceiveNode(int stageId, DataSchema dataSchema, int senderStageId,
       RelDistribution.Type exchangeType, @Nullable KeySelector<Object[], Object[]> partitionKeySelector,
-      StageNode sender) {
+      @Nullable List<RelFieldCollation> fieldCollations, StageNode sender) {
     super(stageId, dataSchema);
     _senderStageId = senderStageId;
     _exchangeType = exchangeType;
     _partitionKeySelector = partitionKeySelector;
+    if (!CollectionUtils.isEmpty(fieldCollations)) {
+      _collationKeys = new ArrayList<>(fieldCollations.size());
+      _collationDirections = new ArrayList<>(fieldCollations.size());
+      for (RelFieldCollation fieldCollation : fieldCollations) {
+        _collationDirections.add(fieldCollation.getDirection());
+        _collationKeys.add(new RexExpression.InputRef(fieldCollation.getFieldIndex()));
+      }
+    } else {
+      _collationKeys = Collections.emptyList();
+      _collationDirections = Collections.emptyList();
+    }
     _sender = sender;
   }
 
@@ -65,6 +86,14 @@ public class MailboxReceiveNode extends AbstractStageNode {
 
   public KeySelector<Object[], Object[]> getPartitionKeySelector() {
     return _partitionKeySelector;
+  }
+
+  public List<RexExpression> getCollationKeys() {
+    return _collationKeys;
+  }
+
+  public List<RelFieldCollation.Direction> getCollationDirections() {
+    return _collationDirections;
   }
 
   public StageNode getSender() {

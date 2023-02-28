@@ -23,19 +23,27 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.PriorityQueue;
 import java.util.Set;
 import javax.annotation.Nullable;
 import org.apache.calcite.rel.RelDistribution;
+import org.apache.calcite.rel.RelFieldCollation;
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.pinot.common.datablock.DataBlock;
 import org.apache.pinot.common.exception.QueryException;
+import org.apache.pinot.common.utils.DataSchema;
 import org.apache.pinot.query.mailbox.JsonMailboxIdentifier;
 import org.apache.pinot.query.mailbox.MailboxIdentifier;
 import org.apache.pinot.query.mailbox.MailboxService;
 import org.apache.pinot.query.mailbox.ReceivingMailbox;
+import org.apache.pinot.query.planner.logical.RexExpression;
 import org.apache.pinot.query.routing.VirtualServer;
 import org.apache.pinot.query.routing.VirtualServerAddress;
 import org.apache.pinot.query.runtime.blocks.TransferableBlock;
 import org.apache.pinot.query.runtime.blocks.TransferableBlockUtils;
+import org.apache.pinot.query.runtime.operator.utils.SortUtils;
 import org.apache.pinot.query.service.QueryConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,10 +69,15 @@ public class MailboxReceiveOperator extends MultiStageOperator {
 
   private final MailboxService<TransferableBlock> _mailboxService;
   private final RelDistribution.Type _exchangeType;
+  private final List<RexExpression> _collationKeys;
+  private final List<RelFieldCollation.Direction> _collationDirections;
+  private final DataSchema _dataSchema;
   private final List<MailboxIdentifier> _sendingMailbox;
   private final long _deadlineTimestampNano;
+  private final PriorityQueue<Object[]> _priorityQueue;
   private int _serverIdx;
   private TransferableBlock _upstreamErrorBlock;
+  private boolean _isSortedBlockConstructed;
 
   private static MailboxIdentifier toMailboxId(VirtualServer sender, long jobId, int senderStageId,
       int receiverStageId, VirtualServerAddress receiver) {
@@ -78,7 +91,8 @@ public class MailboxReceiveOperator extends MultiStageOperator {
 
   // TODO: Move deadlineInNanoSeconds to OperatorContext.
   public MailboxReceiveOperator(MailboxService<TransferableBlock> mailboxService,
-      List<VirtualServer> sendingStageInstances, RelDistribution.Type exchangeType, VirtualServerAddress receiver,
+      List<VirtualServer> sendingStageInstances, RelDistribution.Type exchangeType, List<RexExpression> collationKeys,
+      List<RelFieldCollation.Direction> collationDirections, DataSchema dataSchema, VirtualServerAddress receiver,
       long jobId, int senderStageId, int receiverStageId, Long timeoutMs) {
     super(jobId, senderStageId, receiver);
     _mailboxService = mailboxService;
@@ -112,8 +126,18 @@ public class MailboxReceiveOperator extends MultiStageOperator {
         _sendingMailbox.add(toMailboxId(instance, jobId, senderStageId, receiverStageId, receiver));
       }
     }
+    _collationKeys = collationKeys;
+    _collationDirections = collationDirections;
+    _dataSchema = dataSchema;
+    if (CollectionUtils.isEmpty(collationKeys)) {
+      _priorityQueue = null;
+    } else {
+      _priorityQueue = new PriorityQueue<>(new SortUtils.SortComparator(collationKeys, collationDirections,
+          dataSchema, false));
+    }
     _upstreamErrorBlock = null;
     _serverIdx = 0;
+    _isSortedBlockConstructed = false;
   }
 
   public List<MailboxIdentifier> getSendingMailbox() {
@@ -161,7 +185,18 @@ public class MailboxReceiveOperator extends MultiStageOperator {
               return _upstreamErrorBlock;
             }
             if (!block.isEndOfStreamBlock()) {
-              return block;
+              if (_priorityQueue != null) {
+                List<Object[]> container = block.getContainer();
+                // TODO: Figure out how best to limit the size growth of the PriorityQueue here. For some types of
+                //       queries, such as window functions, limiting the data purely based on number of rows is not
+                //       possible since the correctness of the query output can be affected. e.g. Window functions
+                //       usually apply their aggregations over a partition and if the full partition (or at least all
+                //       the same ORDER BY keys for default frames) isn't present then the aggregation results will be
+                //       incorrect. For now assume unbounded PriorityQueue.
+                _priorityQueue.addAll(container);
+              } else {
+                return block;
+              }
             } else {
               if (!block.getResultMetadata().isEmpty()) {
                 _operatorStatsMap.putAll(block.getResultMetadata());
@@ -176,6 +211,18 @@ public class MailboxReceiveOperator extends MultiStageOperator {
       }
     }
 
+    if (((openMailboxCount == 0) || (openMailboxCount <= eosMailboxCount))
+        && (!CollectionUtils.isEmpty(_priorityQueue)) && !_isSortedBlockConstructed) {
+      // Some data is present in the PriorityQueue, these need to be sent upstream
+      LinkedList<Object[]> rows = new LinkedList<>();
+      while (_priorityQueue.size() > 0) {
+        Object[] row = _priorityQueue.poll();
+        rows.addFirst(row);
+      }
+      _isSortedBlockConstructed = true;
+      return new TransferableBlock(rows, _dataSchema, DataBlock.Type.ROW);
+    }
+
     // there are two conditions in which we should return EOS: (1) there were
     // no mailboxes to open (this shouldn't happen because the second condition
     // should be hit first, but is defensive) (2) every mailbox that was opened
@@ -185,5 +232,9 @@ public class MailboxReceiveOperator extends MultiStageOperator {
         openMailboxCount > 0 && openMailboxCount > eosMailboxCount ? TransferableBlockUtils.getNoOpTransferableBlock()
             : TransferableBlockUtils.getEndOfStreamTransferableBlock();
     return block;
+  }
+
+  public boolean hasCollationKeys() {
+    return !CollectionUtils.isEmpty(_collationKeys);
   }
 }
