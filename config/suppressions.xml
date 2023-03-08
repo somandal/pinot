@@ -43,6 +43,12 @@
   <suppress checks=".*" files="/protobuf/Sample.java"/>
   <suppress checks=".*" files="/protobuf/CompositeTypes.java"/>
 
+  <!-- Suppress copied Apache Calcite files -->
+  <suppress checks=".*" files="pinot-query-planner/src/main/java/org/apache/calcite/rel/core"/>
+  <suppress checks=".*" files="pinot-query-planner/src/main/java/org/apache/calcite/rel/logical"/>
+  <suppress checks=".*" files="pinot-query-planner/src/main/java/org/apache/calcite/rel/hint/HintPredicates.java"/>
+  <suppress checks=".*" files="pinot-query-planner/src/main/java/org/apache/calcite/rel/hint/NodeTypeHintPredicate.java"/>
+
   <!-- Allow static imports in tests -->
   <suppress checks="AvoidStaticImport" files="[\\/]src[\\/]test[\\/].*" />
 </suppressions>
