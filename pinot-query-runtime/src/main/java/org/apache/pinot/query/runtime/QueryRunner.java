@@ -216,8 +216,8 @@ public class QueryRunner {
       mailboxSendOperator = new MailboxSendOperator(opChainExecutionContext,
           new LeafStageTransferableBlockOperator(opChainExecutionContext, serverQueryResults, sendNode.getDataSchema()),
           sendNode.getExchangeType(), sendNode.getPartitionKeySelector(), sendNode.getCollationKeys(),
-          sendNode.getCollationDirections(), sendNode.isSortOnSender(), sendNode.getStageId(),
-          sendNode.getReceiverStageId());
+          sendNode.getCollationDirections(), sendNode.isSortOnSender(), sendNode.isPartitionedSort(),
+          sendNode.getStageId(), sendNode.getReceiverStageId());
       int blockCounter = 0;
       while (!TransferableBlockUtils.isEndOfStream(mailboxSendOperator.nextBlock())) {
         LOGGER.debug("Acquired transferable block: {}", blockCounter++);

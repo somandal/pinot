@@ -47,6 +47,8 @@ public class MailboxReceiveNode extends AbstractStageNode {
   private boolean _isSortOnSender;
   @ProtoProperties
   private boolean _isSortOnReceiver;
+  @ProtoProperties
+  private boolean _isPartitionedSort;
 
   // this is only available during planning and should not be relied
   // on in any post-serialization code
@@ -59,7 +61,7 @@ public class MailboxReceiveNode extends AbstractStageNode {
   public MailboxReceiveNode(int stageId, DataSchema dataSchema, int senderStageId,
       RelDistribution.Type exchangeType, @Nullable KeySelector<Object[], Object[]> partitionKeySelector,
       @Nullable List<RelFieldCollation> fieldCollations, boolean isSortOnSender, boolean isSortOnReceiver,
-      StageNode sender) {
+      boolean isPartitionedSort, StageNode sender) {
     super(stageId, dataSchema);
     _senderStageId = senderStageId;
     _exchangeType = exchangeType;
@@ -78,6 +80,9 @@ public class MailboxReceiveNode extends AbstractStageNode {
     _isSortOnSender = isSortOnSender;
     Preconditions.checkState(!isSortOnSender, "Input shouldn't be sorted as ordering on send is not yet implemented!");
     _isSortOnReceiver = isSortOnReceiver;
+    // TODO: Once support is added for isSortOnSender, ensure that both isSortOnSender and isSortOnReceiver aren't true
+    //       when isPartitionedSort is true. To sort on both sides, global ordering is required.
+    _isPartitionedSort = isPartitionedSort;
     _sender = sender;
   }
 
@@ -111,6 +116,10 @@ public class MailboxReceiveNode extends AbstractStageNode {
 
   public boolean isSortOnReceiver() {
     return _isSortOnReceiver;
+  }
+
+  public boolean isPartitionedSort() {
+    return _isPartitionedSort;
   }
 
   public StageNode getSender() {

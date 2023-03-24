@@ -284,7 +284,7 @@ public class QueryDispatcher {
     // timeout is set for reduce stage
     MailboxReceiveOperator mailboxReceiveOperator =
         new MailboxReceiveOperator(context, RelDistribution.Type.RANDOM_DISTRIBUTED, Collections.emptyList(),
-            Collections.emptyList(), false, false, dataSchema, stageId, reducerStageId);
+            Collections.emptyList(), null, false, false, false, dataSchema, stageId, reducerStageId);
     return mailboxReceiveOperator;
   }
 

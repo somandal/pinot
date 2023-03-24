@@ -49,6 +49,7 @@ import org.slf4j.LoggerFactory;
  * This {@code MailboxSendOperator} is created to send {@link TransferableBlock}s to the receiving end.
  *
  * TODO: Add support to sort the data prior to sending if sorting is enabled
+ *       Add support for partitioned sort if enabled
  */
 public class MailboxSendOperator extends MultiStageOperator {
   private static final Logger LOGGER = LoggerFactory.getLogger(MailboxSendOperator.class);
@@ -63,6 +64,7 @@ public class MailboxSendOperator extends MultiStageOperator {
   private final List<RexExpression> _collationKeys;
   private final List<RelFieldCollation.Direction> _collationDirections;
   private final boolean _isSortOnSender;
+  private final boolean _isPartitionedSort;
 
   @VisibleForTesting
   interface BlockExchangeFactory {
@@ -78,10 +80,10 @@ public class MailboxSendOperator extends MultiStageOperator {
 
   public MailboxSendOperator(OpChainExecutionContext context, MultiStageOperator dataTableBlockBaseOperator,
       RelDistribution.Type exchangeType, KeySelector<Object[], Object[]> keySelector, List<RexExpression> collationKeys,
-      List<RelFieldCollation.Direction> collationDirections, boolean isSortOnSender, int senderStageId,
-      int receiverStageId) {
+      List<RelFieldCollation.Direction> collationDirections, boolean isSortOnSender, boolean isPartitionedSort,
+      int senderStageId, int receiverStageId) {
     this(context, dataTableBlockBaseOperator, exchangeType, keySelector, collationKeys, collationDirections,
-        isSortOnSender,
+        isSortOnSender, isPartitionedSort,
         (server) -> toMailboxId(server, context.getRequestId(), senderStageId, receiverStageId, context.getServer()),
         BlockExchange::getExchange, receiverStageId);
   }
@@ -89,7 +91,7 @@ public class MailboxSendOperator extends MultiStageOperator {
   @VisibleForTesting
   MailboxSendOperator(OpChainExecutionContext context, MultiStageOperator dataTableBlockBaseOperator,
       RelDistribution.Type exchangeType, KeySelector<Object[], Object[]> keySelector, List<RexExpression> collationKeys,
-      List<RelFieldCollation.Direction> collationDirections, boolean isSortOnSender,
+      List<RelFieldCollation.Direction> collationDirections, boolean isSortOnSender, boolean isPartitionedSort,
       MailboxIdGenerator mailboxIdGenerator, BlockExchangeFactory blockExchangeFactory, int receiverStageId) {
     super(context);
     _dataTableBlockBaseOperator = dataTableBlockBaseOperator;
@@ -129,6 +131,7 @@ public class MailboxSendOperator extends MultiStageOperator {
     _collationKeys = collationKeys;
     _collationDirections = collationDirections;
     _isSortOnSender = isSortOnSender;
+    _isPartitionedSort = isPartitionedSort;
 
     Preconditions.checkState(SUPPORTED_EXCHANGE_TYPE.contains(exchangeType),
         String.format("Exchange type '%s' is not supported yet", exchangeType));

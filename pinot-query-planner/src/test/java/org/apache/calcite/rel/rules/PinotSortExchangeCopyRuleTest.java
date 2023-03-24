@@ -82,7 +82,7 @@ public class PinotSortExchangeCopyRuleTest {
   public void shouldMatchLimitNoOffsetNoSort() {
     // Given:
     SortExchange exchange = PinotLogicalSortExchange.create(_input, RelDistributions.SINGLETON, RelCollations.EMPTY,
-        false, false);
+        false, false, false);
     Sort sort = LogicalSort.create(exchange, RelCollations.EMPTY, null, literal(1));
     Mockito.when(_call.rel(0)).thenReturn(sort);
     Mockito.when(_call.rel(1)).thenReturn(exchange);
@@ -110,7 +110,7 @@ public class PinotSortExchangeCopyRuleTest {
     // Given:
     RelCollation collation = RelCollations.of(1);
     SortExchange exchange = PinotLogicalSortExchange.create(_input, RelDistributions.SINGLETON, collation,
-        false, false);
+        false, false, false);
     Sort sort = LogicalSort.create(exchange, collation, null, literal(1));
     Mockito.when(_call.rel(0)).thenReturn(sort);
     Mockito.when(_call.rel(1)).thenReturn(exchange);
@@ -138,7 +138,35 @@ public class PinotSortExchangeCopyRuleTest {
     // Given:
     RelCollation collation = RelCollations.of(1);
     SortExchange exchange = PinotLogicalSortExchange.create(_input, RelDistributions.SINGLETON, collation,
-        true, false);
+        true, false, false);
+    Sort sort = LogicalSort.create(exchange, collation, null, literal(1));
+    Mockito.when(_call.rel(0)).thenReturn(sort);
+    Mockito.when(_call.rel(1)).thenReturn(exchange);
+
+    // When:
+    PinotSortExchangeCopyRule.SORT_EXCHANGE_COPY.onMatch(_call);
+
+    // Then:
+    ArgumentCaptor<RelNode> sortCopyCapture = ArgumentCaptor.forClass(LogicalSort.class);
+    Mockito.verify(_call, Mockito.times(1)).transformTo(sortCopyCapture.capture(), Mockito.anyMap());
+
+    RelNode sortCopy = sortCopyCapture.getValue();
+    Assert.assertTrue(sortCopy instanceof LogicalSort);
+    Assert.assertTrue(((LogicalSort) sortCopy).getInput() instanceof PinotLogicalSortExchange);
+    Assert.assertTrue(((LogicalSort) sortCopy).getInput().getInput(0) instanceof LogicalSort);
+
+    LogicalSort innerSort = (LogicalSort) ((LogicalSort) sortCopy).getInput().getInput(0);
+    Assert.assertEquals(innerSort.getCollation().getKeys().size(), 1);
+    Assert.assertNull((innerSort).offset);
+    Assert.assertEquals((innerSort).fetch, literal(1));
+  }
+
+  @Test
+  public void shouldMatchLimitNoOffsetYesPartitionedSortOnReceiver() {
+    // Given:
+    RelCollation collation = RelCollations.of(1);
+    SortExchange exchange = PinotLogicalSortExchange.create(_input, RelDistributions.SINGLETON, collation,
+        false, true, true);
     Sort sort = LogicalSort.create(exchange, collation, null, literal(1));
     Mockito.when(_call.rel(0)).thenReturn(sort);
     Mockito.when(_call.rel(1)).thenReturn(exchange);
@@ -166,7 +194,7 @@ public class PinotSortExchangeCopyRuleTest {
     // Given:
     RelCollation collation = RelCollations.of(1);
     SortExchange exchange = PinotLogicalSortExchange.create(_input, RelDistributions.SINGLETON, collation, false,
-        true);
+        true, false);
     Sort sort = LogicalSort.create(exchange, collation, null, literal(1));
     Mockito.when(_call.rel(0)).thenReturn(sort);
     Mockito.when(_call.rel(1)).thenReturn(exchange);
@@ -193,7 +221,7 @@ public class PinotSortExchangeCopyRuleTest {
   public void shouldMatchNoSortAndPushDownLimitPlusOffset() {
     // Given:
     SortExchange exchange = PinotLogicalSortExchange.create(_input, RelDistributions.SINGLETON, RelCollations.EMPTY,
-        false, true);
+        false, true, false);
     Sort sort = LogicalSort.create(exchange, RelCollations.EMPTY, literal(2), literal(1));
     Mockito.when(_call.rel(0)).thenReturn(sort);
     Mockito.when(_call.rel(1)).thenReturn(exchange);
@@ -221,7 +249,7 @@ public class PinotSortExchangeCopyRuleTest {
     // Given:
     RelCollation collation = RelCollations.of(1);
     SortExchange exchange = PinotLogicalSortExchange.create(_input, RelDistributions.SINGLETON, collation, false,
-        true);
+        true, false);
     Sort sort = LogicalSort.create(exchange, collation, null, null);
     Mockito.when(_call.rel(0)).thenReturn(sort);
     Mockito.when(_call.rel(1)).thenReturn(exchange);
@@ -249,7 +277,7 @@ public class PinotSortExchangeCopyRuleTest {
     // Given:
     RelCollation collation = RelCollations.of(1);
     SortExchange exchange = PinotLogicalSortExchange.create(_input, RelDistributions.SINGLETON, collation, false,
-        true);
+        true, false);
     Sort sort = LogicalSort.create(exchange, collation, literal(1), literal(2));
     Mockito.when(_call.rel(0)).thenReturn(sort);
     Mockito.when(_call.rel(1)).thenReturn(exchange);
@@ -277,7 +305,7 @@ public class PinotSortExchangeCopyRuleTest {
     // Given:
     RelCollation collation = RelCollations.of(1);
     SortExchange exchange = PinotLogicalSortExchange.create(_input, RelDistributions.SINGLETON, collation, false,
-        true);
+        true, false);
     Sort sort = LogicalSort.create(exchange, collation, null, null);
     Mockito.when(_call.rel(0)).thenReturn(sort);
     Mockito.when(_call.rel(1)).thenReturn(exchange);
@@ -294,7 +322,7 @@ public class PinotSortExchangeCopyRuleTest {
   public void shouldNotMatchOffsetNoLimitNoSort() {
     // Given:
     SortExchange exchange = PinotLogicalSortExchange.create(_input, RelDistributions.SINGLETON, RelCollations.EMPTY,
-        false, true);
+        false, true, false);
     Sort sort = LogicalSort.create(exchange, RelCollations.EMPTY, literal(1), null);
     Mockito.when(_call.rel(0)).thenReturn(sort);
     Mockito.when(_call.rel(1)).thenReturn(exchange);

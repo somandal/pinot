@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import org.apache.calcite.rel.RelDistribution;
 import org.apache.calcite.rel.RelFieldCollation;
@@ -34,6 +35,8 @@ import org.apache.pinot.query.mailbox.JsonMailboxIdentifier;
 import org.apache.pinot.query.mailbox.MailboxService;
 import org.apache.pinot.query.mailbox.ReceivingMailbox;
 import org.apache.pinot.query.planner.logical.RexExpression;
+import org.apache.pinot.query.planner.partitioning.FieldSelectionKeySelector;
+import org.apache.pinot.query.planner.partitioning.KeySelector;
 import org.apache.pinot.query.routing.VirtualServer;
 import org.apache.pinot.query.routing.VirtualServerAddress;
 import org.apache.pinot.query.runtime.blocks.TransferableBlock;
@@ -69,6 +72,8 @@ public class MailboxReceiveOperatorTest {
   private VirtualServer _server1;
   @Mock
   private VirtualServer _server2;
+  @Mock
+  private KeySelector<Object[], Object[]> _selector;
 
   private final VirtualServerAddress _testAddr = new VirtualServerAddress("test", 123, 0);
 
@@ -105,7 +110,7 @@ public class MailboxReceiveOperatorTest {
             new HashMap<>());
     MailboxReceiveOperator receiveOp =
         new MailboxReceiveOperator(context, new ArrayList<>(), RelDistribution.Type.SINGLETON, collationKeys,
-            collationDirections, false, sortOnReceiver, inSchema, 456, 789, 10L);
+            collationDirections, _selector, false, sortOnReceiver, false, inSchema, 456, 789, 10L);
     Thread.sleep(200L);
     TransferableBlock mailbox = receiveOp.nextBlock();
     Assert.assertTrue(mailbox.isErrorBlock());
@@ -116,14 +121,14 @@ public class MailboxReceiveOperatorTest {
     context = new OpChainExecutionContext(_mailboxService, 1, DEFAULT_RECEIVER_STAGE_ID, _testAddr, 2000L, 2000L,
         new HashMap<>());
     receiveOp = new MailboxReceiveOperator(context, new ArrayList<>(), RelDistribution.Type.SINGLETON, collationKeys,
-        collationDirections, false, sortOnReceiver, inSchema, 456, 789, 2000L);
+        collationDirections, _selector, false, sortOnReceiver, false, inSchema, 456, 789, 2000L);
     Thread.sleep(200L);
     mailbox = receiveOp.nextBlock();
     Assert.assertFalse(mailbox.isErrorBlock());
     context = new OpChainExecutionContext(_mailboxService, 1, DEFAULT_RECEIVER_STAGE_ID, _testAddr, Long.MAX_VALUE,
         Long.MAX_VALUE, new HashMap<>());
     receiveOp = new MailboxReceiveOperator(context, new ArrayList<>(), RelDistribution.Type.SINGLETON, collationKeys,
-        collationDirections, false, sortOnReceiver, inSchema, 456, 789, null);
+        collationDirections, _selector, false, sortOnReceiver, false, inSchema, 456, 789, null);
     Thread.sleep(200L);
     mailbox = receiveOp.nextBlock();
     Assert.assertFalse(mailbox.isErrorBlock());
@@ -159,7 +164,7 @@ public class MailboxReceiveOperatorTest {
             Long.MAX_VALUE, new HashMap<>());
     MailboxReceiveOperator receiveOp =
         new MailboxReceiveOperator(context, ImmutableList.of(_server1, _server2), RelDistribution.Type.SINGLETON,
-            collationKeys, collationDirections, false, sortOnReceiver, inSchema, 456, 789, null);
+            collationKeys, collationDirections, _selector, false, sortOnReceiver, false, inSchema, 456, 789, null);
   }
 
   @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp = ".*RANGE_DISTRIBUTED.*")
@@ -189,8 +194,8 @@ public class MailboxReceiveOperatorTest {
         new OpChainExecutionContext(_mailboxService, 1, DEFAULT_RECEIVER_STAGE_ID, _testAddr, Long.MAX_VALUE,
             Long.MAX_VALUE, new HashMap<>());
     MailboxReceiveOperator receiveOp = new MailboxReceiveOperator(context, ImmutableList.of(_server1, _server2),
-        RelDistribution.Type.RANGE_DISTRIBUTED, collationKeys, collationDirections, false, sortOnReceiver, inSchema,
-        456, 789, null);
+        RelDistribution.Type.RANGE_DISTRIBUTED, collationKeys, collationDirections, _selector, false, sortOnReceiver,
+        false, inSchema, 456, 789, null);
   }
 
   @Test
@@ -232,8 +237,8 @@ public class MailboxReceiveOperatorTest {
 
     MailboxReceiveOperator receiveOp =
         new MailboxReceiveOperator(context, ImmutableList.of(_server1, _server2), RelDistribution.Type.SINGLETON,
-            collationKeys, collationDirections, false, sortOnReceiver, inSchema, stageId, DEFAULT_RECEIVER_STAGE_ID,
-            null);
+            collationKeys, collationDirections, _selector, false, sortOnReceiver, false, inSchema, stageId,
+            DEFAULT_RECEIVER_STAGE_ID, null);
 
     // Receive end of stream block directly when there is no match.
     Assert.assertTrue(receiveOp.nextBlock().isEndOfStreamBlock());
@@ -283,8 +288,8 @@ public class MailboxReceiveOperatorTest {
 
     MailboxReceiveOperator receiveOp =
         new MailboxReceiveOperator(context, ImmutableList.of(_server1, _server2), RelDistribution.Type.SINGLETON,
-            collationKeys, collationDirections, false, sortOnReceiver, inSchema, stageId, DEFAULT_RECEIVER_STAGE_ID,
-            null);
+            collationKeys, collationDirections, _selector, false, sortOnReceiver, false, inSchema, stageId,
+            DEFAULT_RECEIVER_STAGE_ID, null);
 
     // Receive end of stream block directly when mailbox is close.
     Assert.assertTrue(receiveOp.nextBlock().isEndOfStreamBlock());
@@ -337,8 +342,8 @@ public class MailboxReceiveOperatorTest {
 
     MailboxReceiveOperator receiveOp =
         new MailboxReceiveOperator(context, ImmutableList.of(_server1, _server2), RelDistribution.Type.SINGLETON,
-            collationKeys, collationDirections, false, sortOnReceiver, inSchema, stageId, DEFAULT_RECEIVER_STAGE_ID,
-            null);
+            collationKeys, collationDirections, _selector, false, sortOnReceiver, false, inSchema, stageId,
+            DEFAULT_RECEIVER_STAGE_ID, null);
     // Receive NoOpBlock.
     Assert.assertTrue(receiveOp.nextBlock().isNoOpBlock());
   }
@@ -389,8 +394,8 @@ public class MailboxReceiveOperatorTest {
 
     MailboxReceiveOperator receiveOp =
         new MailboxReceiveOperator(context, ImmutableList.of(_server1, _server2), RelDistribution.Type.SINGLETON,
-            collationKeys, collationDirections, false, sortOnReceiver, inSchema, stageId, DEFAULT_RECEIVER_STAGE_ID,
-            null);
+            collationKeys, collationDirections, _selector, false, sortOnReceiver, false, inSchema, stageId,
+            DEFAULT_RECEIVER_STAGE_ID, null);
     // Receive EosBloc.
     Assert.assertTrue(receiveOp.nextBlock().isEndOfStreamBlock());
   }
@@ -443,8 +448,8 @@ public class MailboxReceiveOperatorTest {
 
     MailboxReceiveOperator receiveOp =
         new MailboxReceiveOperator(context, ImmutableList.of(_server1, _server2), RelDistribution.Type.SINGLETON,
-            collationKeys, collationDirections, false, sortOnReceiver, inSchema, stageId, DEFAULT_RECEIVER_STAGE_ID,
-            null);
+            collationKeys, collationDirections, _selector, false, sortOnReceiver, false, inSchema, stageId,
+            DEFAULT_RECEIVER_STAGE_ID, null);
     TransferableBlock receivedBlock = receiveOp.nextBlock();
     while (receivedBlock.isNoOpBlock()) {
       receivedBlock = receiveOp.nextBlock();
@@ -500,8 +505,8 @@ public class MailboxReceiveOperatorTest {
 
     MailboxReceiveOperator receiveOp =
         new MailboxReceiveOperator(context, ImmutableList.of(_server1, _server2), RelDistribution.Type.SINGLETON,
-            collationKeys, collationDirections, false, sortOnReceiver, inSchema, stageId, DEFAULT_RECEIVER_STAGE_ID,
-            null);
+            collationKeys, collationDirections, _selector, false, sortOnReceiver, false, inSchema, stageId,
+            DEFAULT_RECEIVER_STAGE_ID, null);
     TransferableBlock receivedBlock = receiveOp.nextBlock();
     Assert.assertTrue(receivedBlock.isErrorBlock());
     MetadataBlock error = (MetadataBlock) receivedBlock.getDataBlock();
@@ -557,8 +562,8 @@ public class MailboxReceiveOperatorTest {
 
     MailboxReceiveOperator receiveOp =
         new MailboxReceiveOperator(context, ImmutableList.of(_server1, _server2), RelDistribution.Type.HASH_DISTRIBUTED,
-            collationKeys, collationDirections, false, sortOnReceiver, inSchema, stageId, DEFAULT_RECEIVER_STAGE_ID,
-            null);
+            collationKeys, collationDirections, _selector, false, sortOnReceiver, false, inSchema, stageId,
+            DEFAULT_RECEIVER_STAGE_ID, null);
     TransferableBlock receivedBlock = receiveOp.nextBlock();
     while (receivedBlock.isNoOpBlock()) {
       receivedBlock = receiveOp.nextBlock();
@@ -618,8 +623,8 @@ public class MailboxReceiveOperatorTest {
 
     MailboxReceiveOperator receiveOp =
         new MailboxReceiveOperator(context, ImmutableList.of(_server1, _server2), RelDistribution.Type.HASH_DISTRIBUTED,
-            collationKeys, collationDirections, false, sortOnReceiver, inSchema, stageId, DEFAULT_RECEIVER_STAGE_ID,
-            null);
+            collationKeys, collationDirections, _selector, false, sortOnReceiver, false, inSchema, stageId,
+            DEFAULT_RECEIVER_STAGE_ID, null);
     TransferableBlock receivedBlock = receiveOp.nextBlock();
     while (receivedBlock.isNoOpBlock()) {
       receivedBlock = receiveOp.nextBlock();
@@ -671,7 +676,7 @@ public class MailboxReceiveOperatorTest {
 
     MailboxReceiveOperator receiveOp =
         new MailboxReceiveOperator(context, ImmutableList.of(_server1, _server2), RelDistribution.Type.HASH_DISTRIBUTED,
-            Collections.emptyList(), Collections.emptyList(), false, false, inSchema, stageId,
+            Collections.emptyList(), Collections.emptyList(), _selector, false, false, false, inSchema, stageId,
             DEFAULT_RECEIVER_STAGE_ID, null);
     // Receive first block from first server.
     TransferableBlock receivedBlock = receiveOp.nextBlock();
@@ -741,8 +746,8 @@ public class MailboxReceiveOperatorTest {
 
     MailboxReceiveOperator receiveOp =
         new MailboxReceiveOperator(context, ImmutableList.of(_server1, _server2), RelDistribution.Type.HASH_DISTRIBUTED,
-            collationKeys, collationDirections, false, sortOnReceiver, inSchema, stageId, DEFAULT_RECEIVER_STAGE_ID,
-            null);
+            collationKeys, collationDirections, _selector, false, sortOnReceiver, false, inSchema, stageId,
+            DEFAULT_RECEIVER_STAGE_ID, null);
     // Receive error block from first server.
     TransferableBlock receivedBlock = receiveOp.nextBlock();
     Assert.assertTrue(receivedBlock.isErrorBlock());
@@ -799,8 +804,8 @@ public class MailboxReceiveOperatorTest {
 
     MailboxReceiveOperator receiveOp =
         new MailboxReceiveOperator(context, ImmutableList.of(_server1, _server2), RelDistribution.Type.HASH_DISTRIBUTED,
-            collationKeys, collationDirections, false, sortOnReceiver, inSchema, stageId, DEFAULT_RECEIVER_STAGE_ID,
-            null);
+            collationKeys, collationDirections, _selector, false, sortOnReceiver, false, inSchema, stageId,
+            DEFAULT_RECEIVER_STAGE_ID, null);
     TransferableBlock receivedBlock = receiveOp.nextBlock();
     Assert.assertTrue(receivedBlock.isErrorBlock(), "server-1 should have returned an error-block");
   }
@@ -857,8 +862,8 @@ public class MailboxReceiveOperatorTest {
             Long.MAX_VALUE, new HashMap<>());
 
     MailboxReceiveOperator receiveOp = new MailboxReceiveOperator(context, ImmutableList.of(_server1, _server2),
-        RelDistribution.Type.HASH_DISTRIBUTED, collationKeys, collationDirection, false, true, inSchema, stageId,
-        DEFAULT_RECEIVER_STAGE_ID, null);
+        RelDistribution.Type.HASH_DISTRIBUTED, collationKeys, collationDirection, _selector, false, true, false,
+        inSchema, stageId, DEFAULT_RECEIVER_STAGE_ID, null);
 
     // Receive a set of no-op blocks and skip over them
     TransferableBlock receivedBlock = receiveOp.nextBlock();
@@ -941,8 +946,8 @@ public class MailboxReceiveOperatorTest {
             Long.MAX_VALUE, new HashMap<>());
 
     MailboxReceiveOperator receiveOp = new MailboxReceiveOperator(context, ImmutableList.of(_server1, _server2),
-        RelDistribution.Type.HASH_DISTRIBUTED, collationKeys, collationDirection, false, true, inSchema, stageId,
-        DEFAULT_RECEIVER_STAGE_ID, null);
+        RelDistribution.Type.HASH_DISTRIBUTED, collationKeys, collationDirection, _selector, false, true, false,
+        inSchema, stageId, DEFAULT_RECEIVER_STAGE_ID, null);
 
     // Receive a set of no-op blocks and skip over them
     TransferableBlock receivedBlock = receiveOp.nextBlock();
@@ -964,6 +969,244 @@ public class MailboxReceiveOperatorTest {
       Assert.assertEquals(resultRows.get(2), expRow3);
       Assert.assertEquals(resultRows.get(3), expRow5);
       Assert.assertEquals(resultRows.get(4), expRow4);
+    }
+
+    receivedBlock = receiveOp.nextBlock();
+    Assert.assertTrue(receivedBlock.isEndOfStreamBlock());
+  }
+
+  @Test
+  public void shouldReceiveMailboxFromTwoServersWithCollationKeyPartitionSortEnabled()
+      throws Exception {
+    FieldSelectionKeySelector keySelector = new FieldSelectionKeySelector(0);
+
+    String server1Host = "hash1";
+    int server1Port = 123;
+    Mockito.when(_server1.getHostname()).thenReturn(server1Host);
+    Mockito.when(_server1.getQueryMailboxPort()).thenReturn(server1Port);
+
+    String server2Host = "hash2";
+    int server2Port = 456;
+    Mockito.when(_server2.getHostname()).thenReturn(server2Host);
+    Mockito.when(_server2.getQueryMailboxPort()).thenReturn(server2Port);
+
+    int jobId = 456;
+    int stageId = 0;
+    int toPort = 8888;
+    String toHost = "toHost";
+    VirtualServerAddress toAddress = new VirtualServerAddress(toHost, toPort, 0);
+
+    DataSchema inSchema = new DataSchema(new String[]{"col1", "col2"}, new DataSchema.ColumnDataType[]{INT, INT});
+    JsonMailboxIdentifier expectedMailboxId1 = new JsonMailboxIdentifier(String.format("%s_%s", jobId, stageId),
+        new VirtualServerAddress(server1Host, server1Port, 0), toAddress, stageId, DEFAULT_RECEIVER_STAGE_ID);
+    Mockito.when(_mailboxService.getReceivingMailbox(expectedMailboxId1)).thenReturn(_mailbox);
+    Mockito.when(_mailbox.isClosed()).thenReturn(false);
+    Object[] expRow1 = new Object[]{1, 1};
+    Object[] expRow2 = new Object[]{4, 2};
+    Object[] expRow3 = new Object[]{3, 3};
+    Object[] expRow4 = new Object[]{4, 1};
+    Object[] expRow5 = new Object[]{2, -3};
+    Mockito.when(_mailbox.receive())
+        .thenReturn(OperatorTestUtil.block(inSchema, expRow1), OperatorTestUtil.block(inSchema, expRow2),
+            OperatorTestUtil.block(inSchema, expRow3), OperatorTestUtil.block(inSchema, expRow4),
+            OperatorTestUtil.block(inSchema, expRow5), TransferableBlockUtils.getEndOfStreamTransferableBlock());
+
+    JsonMailboxIdentifier expectedMailboxId2 = new JsonMailboxIdentifier(String.format("%s_%s", jobId, stageId),
+        new VirtualServerAddress(server2Host, server2Port, 0), toAddress, stageId, DEFAULT_RECEIVER_STAGE_ID);
+    Mockito.when(_mailboxService.getReceivingMailbox(expectedMailboxId2)).thenReturn(_mailbox2);
+    Mockito.when(_mailbox2.isClosed()).thenReturn(false);
+    Object[] expRow6 = new Object[]{3, 4};
+    Object[] expRow7 = new Object[]{1, 95};
+    Object[] expRow8 = new Object[]{2, 42};
+    Object[] expRow9 = new Object[]{1, -1};
+    Object[] expRow10 = new Object[]{3, -42};
+    Mockito.when(_mailbox2.receive())
+        .thenReturn(OperatorTestUtil.block(inSchema, expRow6),
+            OperatorTestUtil.block(inSchema, expRow7), OperatorTestUtil.block(inSchema, expRow8),
+            OperatorTestUtil.block(inSchema, expRow9), OperatorTestUtil.block(inSchema, expRow10),
+            TransferableBlockUtils.getEndOfStreamTransferableBlock());
+
+    // Setup the Hashmap containing the expected rows in order for each partition
+    Map<Integer, List<Object[]>> expectedRowMap = new HashMap<>();
+    expectedRowMap.put(1, Arrays.asList(expRow9, expRow1, expRow7));
+    expectedRowMap.put(2, Arrays.asList(expRow5, expRow8));
+    expectedRowMap.put(3, Arrays.asList(expRow10, expRow3, expRow6));
+    expectedRowMap.put(4, Arrays.asList(expRow4, expRow2));
+
+    // Setup the collation key and direction
+    List<RexExpression> collationKeys = new ArrayList<>(Collections.singletonList(new RexExpression.InputRef(1)));
+    RelFieldCollation.Direction direction = _random.nextBoolean() ? RelFieldCollation.Direction.ASCENDING
+        : RelFieldCollation.Direction.DESCENDING;
+    List<RelFieldCollation.Direction> collationDirection = new ArrayList<>(Collections.singletonList(direction));
+
+    OpChainExecutionContext context =
+        new OpChainExecutionContext(_mailboxService, jobId, DEFAULT_RECEIVER_STAGE_ID, toAddress, Long.MAX_VALUE,
+            Long.MAX_VALUE, new HashMap<>());
+
+    MailboxReceiveOperator receiveOp = new MailboxReceiveOperator(context, ImmutableList.of(_server1, _server2),
+        RelDistribution.Type.HASH_DISTRIBUTED, collationKeys, collationDirection, keySelector, false, true, true,
+        inSchema, stageId, DEFAULT_RECEIVER_STAGE_ID, null);
+
+    // Receive a set of no-op blocks and skip over them
+    TransferableBlock receivedBlock = receiveOp.nextBlock();
+    while (receivedBlock.isNoOpBlock()) {
+      receivedBlock = receiveOp.nextBlock();
+    }
+    List<Object[]> resultRows = receivedBlock.getContainer();
+    // All blocks should be returned together since ordering was required
+    Assert.assertEquals(resultRows.size(), 10);
+
+    // Construct the result row Hashmap to divide the results into partitions
+    Map<Integer, List<Object[]>> resultRowMap = new HashMap<>();
+    Integer partitionKey;
+    Integer previousPartitionKey = null;
+    for (Object[] resultRow : resultRows) {
+      partitionKey = (Integer) resultRow[0];
+      // If a partition key different from the previous is seen, ensure that this is a new partition. All the keys
+      // belonging to the same partition should be clubbed together.
+      if (!partitionKey.equals(previousPartitionKey)) {
+        Assert.assertFalse(resultRowMap.containsKey(partitionKey),
+            "Partition boundary has changed but a previous partition key is seen again!");
+        resultRowMap.put(partitionKey, new ArrayList<>());
+      }
+      resultRowMap.get(partitionKey).add(resultRow);
+      previousPartitionKey = partitionKey;
+    }
+    Assert.assertEquals(expectedRowMap.keySet(), resultRowMap.keySet());
+    if (direction == RelFieldCollation.Direction.ASCENDING) {
+      resultRowMap.forEach((key, resultList) -> {
+        List<Object[]> expectedList = expectedRowMap.get(key);
+        Assert.assertEquals(expectedList, resultList);
+      });
+    } else {
+      resultRowMap.forEach((key, resultList) -> {
+        // Ordering should be reversed so reverse the expected list
+        Collections.reverse(expectedRowMap.get(key));
+        List<Object[]> expectedList = expectedRowMap.get(key);
+        Assert.assertEquals(expectedList, resultList);
+      });
+    }
+
+    receivedBlock = receiveOp.nextBlock();
+    Assert.assertTrue(receivedBlock.isEndOfStreamBlock());
+  }
+
+  @Test
+  public void shouldReceiveMailboxFromTwoServersWithCollationKeyTwoColumnsPartitionSortEnabled()
+      throws Exception {
+    FieldSelectionKeySelector keySelector = new FieldSelectionKeySelector(0);
+
+    String server1Host = "hash1";
+    int server1Port = 123;
+    Mockito.when(_server1.getHostname()).thenReturn(server1Host);
+    Mockito.when(_server1.getQueryMailboxPort()).thenReturn(server1Port);
+
+    String server2Host = "hash2";
+    int server2Port = 456;
+    Mockito.when(_server2.getHostname()).thenReturn(server2Host);
+    Mockito.when(_server2.getQueryMailboxPort()).thenReturn(server2Port);
+
+    int jobId = 456;
+    int stageId = 0;
+    int toPort = 8888;
+    String toHost = "toHost";
+    VirtualServerAddress toAddress = new VirtualServerAddress(toHost, toPort, 0);
+
+    DataSchema inSchema = new DataSchema(new String[]{"col1", "col2", "col3"},
+        new DataSchema.ColumnDataType[]{STRING, STRING, INT});
+    JsonMailboxIdentifier expectedMailboxId1 = new JsonMailboxIdentifier(String.format("%s_%s", jobId, stageId),
+        new VirtualServerAddress(server1Host, server1Port, 0), toAddress, stageId, DEFAULT_RECEIVER_STAGE_ID);
+    Mockito.when(_mailboxService.getReceivingMailbox(expectedMailboxId1)).thenReturn(_mailbox);
+    Mockito.when(_mailbox.isClosed()).thenReturn(false);
+    Object[] expRow1 = new Object[]{"queen", "mercury", 3};
+    Object[] expRow2 = new Object[]{"pink floyd", "waters", 24};
+    Object[] expRow3 = new Object[]{"beatles", "harrison", 75};
+    Object[] expRow4 = new Object[]{"led zeppelin", "plant", 1};
+    Object[] expRow5 = new Object[]{"led zeppelin", "page", 9};
+    Mockito.when(_mailbox.receive())
+        .thenReturn(OperatorTestUtil.block(inSchema, expRow1), OperatorTestUtil.block(inSchema, expRow2),
+            OperatorTestUtil.block(inSchema, expRow3), OperatorTestUtil.block(inSchema, expRow4),
+            OperatorTestUtil.block(inSchema, expRow5), TransferableBlockUtils.getEndOfStreamTransferableBlock());
+
+    JsonMailboxIdentifier expectedMailboxId2 = new JsonMailboxIdentifier(String.format("%s_%s", jobId, stageId),
+        new VirtualServerAddress(server2Host, server2Port, 0), toAddress, stageId, DEFAULT_RECEIVER_STAGE_ID);
+    Mockito.when(_mailboxService.getReceivingMailbox(expectedMailboxId2)).thenReturn(_mailbox2);
+    Mockito.when(_mailbox2.isClosed()).thenReturn(false);
+    Object[] expRow6 = new Object[]{"queen", "may", 3};
+    Object[] expRow7 = new Object[]{"pink floyd", "gilmour", 42};
+    Object[] expRow8 = new Object[]{"aerosmith", "tyler", 4};
+    Object[] expRow9 = new Object[]{"foo fighters", "grohl", -1};
+    Object[] expRow10 = new Object[]{"beatles", "lennon", 1};
+    Object[] expRow11 = new Object[]{"pink floyd", "barrett", 1};
+    Mockito.when(_mailbox2.receive())
+        .thenReturn(OperatorTestUtil.block(inSchema, expRow6), OperatorTestUtil.block(inSchema, expRow7),
+            OperatorTestUtil.block(inSchema, expRow8), OperatorTestUtil.block(inSchema, expRow9),
+            OperatorTestUtil.block(inSchema, expRow10), OperatorTestUtil.block(inSchema, expRow11),
+            TransferableBlockUtils.getEndOfStreamTransferableBlock());
+
+    // Setup the Hashmap containing the expected rows in order for each partition
+    Map<String, List<Object[]>> expectedRowMap = new HashMap<>();
+    expectedRowMap.put("queen", Arrays.asList(expRow6, expRow1));
+    expectedRowMap.put("pink floyd", Arrays.asList(expRow11, expRow7, expRow2));
+    expectedRowMap.put("aerosmith", Collections.singletonList(expRow8));
+    expectedRowMap.put("foo fighters", Collections.singletonList(expRow9));
+    expectedRowMap.put("beatles", Arrays.asList(expRow3, expRow10));
+    expectedRowMap.put("led zeppelin", Arrays.asList(expRow5, expRow4));
+
+    // Setup the collation key and direction
+    List<RexExpression> collationKeys = new ArrayList<>(Arrays.asList(new RexExpression.InputRef(1),
+        new RexExpression.InputRef(2)));
+    RelFieldCollation.Direction direction = _random.nextBoolean() ? RelFieldCollation.Direction.ASCENDING
+        : RelFieldCollation.Direction.DESCENDING;
+    List<RelFieldCollation.Direction> collationDirection = new ArrayList<>(Arrays.asList(direction, direction));
+
+    OpChainExecutionContext context =
+        new OpChainExecutionContext(_mailboxService, jobId, DEFAULT_RECEIVER_STAGE_ID, toAddress, Long.MAX_VALUE,
+            Long.MAX_VALUE, new HashMap<>());
+
+    MailboxReceiveOperator receiveOp = new MailboxReceiveOperator(context, ImmutableList.of(_server1, _server2),
+        RelDistribution.Type.HASH_DISTRIBUTED, collationKeys, collationDirection, keySelector, false, true, true,
+        inSchema, stageId, DEFAULT_RECEIVER_STAGE_ID, null);
+
+    // Receive a set of no-op blocks and skip over them
+    TransferableBlock receivedBlock = receiveOp.nextBlock();
+    while (receivedBlock.isNoOpBlock()) {
+      receivedBlock = receiveOp.nextBlock();
+    }
+
+    List<Object[]> resultRows = receivedBlock.getContainer();
+    // All blocks should be returned together since ordering was required
+    Assert.assertEquals(resultRows.size(), 11);
+
+    // Construct the result row Hashmap to divide the results into partitions
+    Map<String, List<Object[]>> resultRowMap = new HashMap<>();
+    String partitionKey;
+    String previousPartitionKey = null;
+    for (Object[] resultRow : resultRows) {
+      partitionKey = (String) resultRow[0];
+      // If a partition key different from the previous is seen, ensure that this is a new partition. All the keys
+      // belonging to the same partition should be clubbed together.
+      if (!partitionKey.equals(previousPartitionKey)) {
+        Assert.assertFalse(resultRowMap.containsKey(partitionKey),
+            "Partition boundary has changed but a previous partition key is seen again!");
+        resultRowMap.put(partitionKey, new ArrayList<>());
+      }
+      resultRowMap.get(partitionKey).add(resultRow);
+      previousPartitionKey = partitionKey;
+    }
+    Assert.assertEquals(expectedRowMap.keySet(), resultRowMap.keySet());
+    if (direction == RelFieldCollation.Direction.ASCENDING) {
+      resultRowMap.forEach((key, resultList) -> {
+        List<Object[]> expectedList = expectedRowMap.get(key);
+        Assert.assertEquals(expectedList, resultList);
+      });
+    } else {
+      resultRowMap.forEach((key, resultList) -> {
+        // Ordering should be reversed so reverse the expected list
+        Collections.reverse(expectedRowMap.get(key));
+        List<Object[]> expectedList = expectedRowMap.get(key);
+        Assert.assertEquals(expectedList, resultList);
+      });
     }
 
     receivedBlock = receiveOp.nextBlock();

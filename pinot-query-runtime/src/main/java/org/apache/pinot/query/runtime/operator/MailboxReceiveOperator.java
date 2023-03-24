@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.PriorityQueue;
@@ -34,15 +35,18 @@ import org.apache.commons.collections.CollectionUtils;
 import org.apache.pinot.common.datablock.DataBlock;
 import org.apache.pinot.common.exception.QueryException;
 import org.apache.pinot.common.utils.DataSchema;
+import org.apache.pinot.core.data.table.Key;
 import org.apache.pinot.query.mailbox.JsonMailboxIdentifier;
 import org.apache.pinot.query.mailbox.MailboxIdentifier;
 import org.apache.pinot.query.mailbox.MailboxService;
 import org.apache.pinot.query.mailbox.ReceivingMailbox;
 import org.apache.pinot.query.planner.logical.RexExpression;
+import org.apache.pinot.query.planner.partitioning.KeySelector;
 import org.apache.pinot.query.routing.VirtualServer;
 import org.apache.pinot.query.routing.VirtualServerAddress;
 import org.apache.pinot.query.runtime.blocks.TransferableBlock;
 import org.apache.pinot.query.runtime.blocks.TransferableBlockUtils;
+import org.apache.pinot.query.runtime.operator.utils.AggregationUtils;
 import org.apache.pinot.query.runtime.operator.utils.SortUtils;
 import org.apache.pinot.query.runtime.plan.OpChainExecutionContext;
 import org.apache.pinot.query.service.QueryConfig;
@@ -75,12 +79,14 @@ public class MailboxReceiveOperator extends MultiStageOperator {
   private final RelDistribution.Type _exchangeType;
   private final List<RexExpression> _collationKeys;
   private final List<RelFieldCollation.Direction> _collationDirections;
+  private final KeySelector<Object[], Object[]> _partitionKeySelector;
   private final boolean _isSortOnSender;
   private final boolean _isSortOnReceiver;
+  private final boolean _isPartitionedSort;
   private final DataSchema _dataSchema;
   private final List<MailboxIdentifier> _sendingMailbox;
   private final long _deadlineTimestampNano;
-  private final PriorityQueue<Object[]> _priorityQueue;
+  private final HashMap<Key, PriorityQueue<Object[]>> _keyPriorityQueueHashMap;
   private int _serverIdx;
   private TransferableBlock _upstreamErrorBlock;
   private boolean _isSortedBlockConstructed;
@@ -96,19 +102,22 @@ public class MailboxReceiveOperator extends MultiStageOperator {
   }
 
   public MailboxReceiveOperator(OpChainExecutionContext context, RelDistribution.Type exchangeType,
-      List<RexExpression> collationKeys, List<RelFieldCollation.Direction> collationDirections, boolean isSortOnSender,
-      boolean isSortOnReceiver, DataSchema dataSchema, int senderStageId, int receiverStageId) {
+      List<RexExpression> collationKeys, List<RelFieldCollation.Direction> collationDirections,
+      KeySelector<Object[], Object[]> keySelector, boolean isSortOnSender, boolean isSortOnReceiver,
+      boolean isPartitionedSort, DataSchema dataSchema, int senderStageId,
+      int receiverStageId) {
     this(context, context.getMetadataMap().get(senderStageId).getServerInstances(), exchangeType, collationKeys,
-        collationDirections, isSortOnSender, isSortOnReceiver, dataSchema, senderStageId,
-        receiverStageId, context.getTimeoutMs());
+        collationDirections, keySelector, isSortOnSender, isSortOnReceiver, isPartitionedSort, dataSchema,
+        senderStageId, receiverStageId, context.getTimeoutMs());
   }
 
   // TODO: Move deadlineInNanoSeconds to OperatorContext.
   // TODO: Remove boxed timeoutMs value from here and use long deadlineMs from context.
   public MailboxReceiveOperator(OpChainExecutionContext context, List<VirtualServer> sendingStageInstances,
       RelDistribution.Type exchangeType, List<RexExpression> collationKeys,
-      List<RelFieldCollation.Direction> collationDirections, boolean isSortOnSender, boolean isSortOnReceiver,
-      DataSchema dataSchema, int senderStageId, int receiverStageId, Long timeoutMs) {
+      List<RelFieldCollation.Direction> collationDirections, KeySelector<Object[], Object[]> keySelector,
+      boolean isSortOnSender, boolean isSortOnReceiver, boolean isPartitionedSort, DataSchema dataSchema,
+      int senderStageId, int receiverStageId, Long timeoutMs) {
     super(context);
     _mailboxService = context.getMailboxService();
     VirtualServerAddress receiver = context.getServer();
@@ -145,14 +154,17 @@ public class MailboxReceiveOperator extends MultiStageOperator {
     }
     _collationKeys = collationKeys;
     _collationDirections = collationDirections;
+    _partitionKeySelector = keySelector;
     _isSortOnSender = isSortOnSender;
     _isSortOnReceiver = isSortOnReceiver;
+    _isPartitionedSort = isPartitionedSort;
+    Preconditions.checkState(!_isPartitionedSort || _partitionKeySelector != null,
+        "The partition key selector cannot be null if partitionedSort is enabled!");
     _dataSchema = dataSchema;
     if (CollectionUtils.isEmpty(collationKeys) || !_isSortOnReceiver) {
-      _priorityQueue = null;
+      _keyPriorityQueueHashMap = null;
     } else {
-      _priorityQueue = new PriorityQueue<>(new SortUtils.SortComparator(collationKeys, collationDirections,
-          dataSchema, false));
+      _keyPriorityQueueHashMap = new HashMap<>();
     }
     _upstreamErrorBlock = null;
     _serverIdx = 0;
@@ -206,10 +218,24 @@ public class MailboxReceiveOperator extends MultiStageOperator {
               return _upstreamErrorBlock;
             }
             if (!block.isEndOfStreamBlock()) {
-              if (_priorityQueue != null) {
+              if (_keyPriorityQueueHashMap != null) {
                 // Ordering is enabled, add rows to the PriorityQueue
                 List<Object[]> container = block.getContainer();
-                _priorityQueue.addAll(container);
+                if (!_isPartitionedSort) {
+                  // Global sorting enabled, ignore partition key
+                  Key emptyKey = AggregationUtils.extractEmptyKey();
+                  _keyPriorityQueueHashMap.computeIfAbsent(emptyKey,
+                      k -> new PriorityQueue<>(new SortUtils.SortComparator(_collationKeys, _collationDirections,
+                          _dataSchema, false))).addAll(container);
+                } else {
+                  // Each row may have a different partition key, perform partitioning
+                  for (Object[] row : container) {
+                    Key key = new Key(_partitionKeySelector.getKey(row));
+                    _keyPriorityQueueHashMap.computeIfAbsent(key,
+                        k -> new PriorityQueue<>(new SortUtils.SortComparator(_collationKeys, _collationDirections,
+                            _dataSchema, false))).add(row);
+                  }
+                }
               } else {
                 // Ordering is not enabled, return the input block as is
                 return block;
@@ -229,13 +255,15 @@ public class MailboxReceiveOperator extends MultiStageOperator {
     }
 
     if (((openMailboxCount == 0) || (openMailboxCount <= eosMailboxCount))
-        && (!CollectionUtils.isEmpty(_priorityQueue)) && !_isSortedBlockConstructed) {
-      // Some data is present in the PriorityQueue, these need to be sent upstream
+        && (_keyPriorityQueueHashMap != null && !_keyPriorityQueueHashMap.isEmpty()) && !_isSortedBlockConstructed) {
+      // Some data is present in the PriorityQueues, these need to be sent upstream
       LinkedList<Object[]> rows = new LinkedList<>();
-      while (_priorityQueue.size() > 0) {
-        Object[] row = _priorityQueue.poll();
-        rows.addFirst(row);
-      }
+      _keyPriorityQueueHashMap.forEach((key, priorityQueue) -> {
+        while (priorityQueue.size() > 0) {
+          Object[] row = priorityQueue.poll();
+          rows.addFirst(row);
+        }
+      });
       _isSortedBlockConstructed = true;
       return new TransferableBlock(rows, _dataSchema, DataBlock.Type.ROW);
     }
@@ -252,8 +280,9 @@ public class MailboxReceiveOperator extends MultiStageOperator {
   }
 
   private void cleanUpResourcesOnError() {
-    if (_priorityQueue != null) {
-      _priorityQueue.clear();
+    if (_keyPriorityQueueHashMap != null) {
+      _keyPriorityQueueHashMap.forEach((key, priorityQueue) -> priorityQueue.clear());
+      _keyPriorityQueueHashMap.clear();
     }
   }
 

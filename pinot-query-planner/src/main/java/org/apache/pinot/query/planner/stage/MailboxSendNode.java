@@ -45,6 +45,8 @@ public class MailboxSendNode extends AbstractStageNode {
   private List<RelFieldCollation.Direction> _collationDirections;
   @ProtoProperties
   private boolean _isSortOnSender;
+  @ProtoProperties
+  private boolean _isPartitionedSort;
 
   public MailboxSendNode(int stageId) {
     super(stageId);
@@ -52,13 +54,15 @@ public class MailboxSendNode extends AbstractStageNode {
 
   public MailboxSendNode(int stageId, DataSchema dataSchema, int receiverStageId,
       RelDistribution.Type exchangeType, @Nullable KeySelector<Object[], Object[]> partitionKeySelector,
-      @Nullable List<RelFieldCollation> fieldCollations, boolean isSortOnSender) {
+      @Nullable List<RelFieldCollation> fieldCollations, boolean isSortOnSender, boolean isPartitionedSort) {
     super(stageId, dataSchema);
     _receiverStageId = receiverStageId;
     _exchangeType = exchangeType;
     _partitionKeySelector = partitionKeySelector;
     // TODO: Support ordering here if the 'fieldCollations' aren't empty and 'sortOnSender' is true
     Preconditions.checkState(!isSortOnSender, "Ordering is not yet supported on Mailbox Send");
+    Preconditions.checkState(!isPartitionedSort,
+        "Input shouldn't be partition sorted yet as ordering on send is not yet implemented!");
     if (!CollectionUtils.isEmpty(fieldCollations) && isSortOnSender) {
       _collationKeys = new ArrayList<>(fieldCollations.size());
       _collationDirections = new ArrayList<>(fieldCollations.size());
@@ -71,6 +75,7 @@ public class MailboxSendNode extends AbstractStageNode {
       _collationDirections = Collections.emptyList();
     }
     _isSortOnSender = isSortOnSender;
+    _isPartitionedSort = isPartitionedSort;
   }
 
   public int getReceiverStageId() {
@@ -99,6 +104,10 @@ public class MailboxSendNode extends AbstractStageNode {
 
   public boolean isSortOnSender() {
     return _isSortOnSender;
+  }
+
+  public boolean isPartitionedSort() {
+    return _isPartitionedSort;
   }
 
   @Override

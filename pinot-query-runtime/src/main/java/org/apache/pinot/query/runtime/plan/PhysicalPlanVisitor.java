@@ -63,8 +63,9 @@ public class PhysicalPlanVisitor implements StageNodeVisitor<MultiStageOperator,
   public MultiStageOperator visitMailboxReceive(MailboxReceiveNode node, PlanRequestContext context) {
     MailboxReceiveOperator mailboxReceiveOperator =
         new MailboxReceiveOperator(context.getOpChainExecutionContext(), node.getExchangeType(),
-            node.getCollationKeys(), node.getCollationDirections(), node.isSortOnSender(), node.isSortOnReceiver(),
-            node.getDataSchema(), node.getSenderStageId(), node.getStageId());
+            node.getCollationKeys(), node.getCollationDirections(), node.getPartitionKeySelector(),
+            node.isSortOnSender(), node.isSortOnReceiver(), node.isPartitionedSort(), node.getDataSchema(),
+            node.getSenderStageId(), node.getStageId());
     context.addReceivingMailboxes(mailboxReceiveOperator.getSendingMailbox());
     return mailboxReceiveOperator;
   }
@@ -74,7 +75,7 @@ public class PhysicalPlanVisitor implements StageNodeVisitor<MultiStageOperator,
     MultiStageOperator nextOperator = node.getInputs().get(0).visit(this, context);
     return new MailboxSendOperator(context.getOpChainExecutionContext(), nextOperator, node.getExchangeType(),
         node.getPartitionKeySelector(), node.getCollationKeys(), node.getCollationDirections(), node.isSortOnSender(),
-        node.getStageId(), node.getReceiverStageId());
+        node.isPartitionedSort(), node.getStageId(), node.getReceiverStageId());
   }
 
   @Override

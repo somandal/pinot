@@ -37,6 +37,10 @@ import org.apache.calcite.rel.core.SortExchange;
  * decision on where to sort is made by the planner and this information has to b passed onto the send and receive
  * nodes for the correct execution.
  *
+ * Additionally decisions on whether to sort at a partition or global level can be made during planning based on the
+ * type of the query. E.g. LogicalSort would always need global ordering whereas LogicalWindow may need partitioned
+ * sort if the window function uses a PARTITION BY key.
+ *
  * Note: This class does not extend {@code LogicalSortExchange} because its constructor which takes the list of
  * parameters is private.
  */
@@ -44,13 +48,15 @@ public class PinotLogicalSortExchange extends SortExchange {
 
   protected final boolean _isSortOnSender;
   protected final boolean _isSortOnReceiver;
+  protected final boolean _isPartitionedSort;
 
   private PinotLogicalSortExchange(RelOptCluster cluster, RelTraitSet traitSet,
       RelNode input, RelDistribution distribution, RelCollation collation,
-      boolean isSortOnSender, boolean isSortOnReceiver) {
+      boolean isSortOnSender, boolean isSortOnReceiver, boolean isPartitionedSort) {
     super(cluster, traitSet, input, distribution, collation);
     _isSortOnSender = isSortOnSender;
     _isSortOnReceiver = isSortOnReceiver;
+    _isPartitionedSort = isPartitionedSort;
   }
 
   /**
@@ -60,6 +66,7 @@ public class PinotLogicalSortExchange extends SortExchange {
     super(input);
     _isSortOnSender = false;
     _isSortOnReceiver = true;
+    _isPartitionedSort = false;
   }
 
   /**
@@ -76,14 +83,15 @@ public class PinotLogicalSortExchange extends SortExchange {
       RelDistribution distribution,
       RelCollation collation,
       boolean isSortOnSender,
-      boolean isSortOnReceiver) {
+      boolean isSortOnReceiver,
+      boolean isPartitionedSort) {
     RelOptCluster cluster = input.getCluster();
     collation = RelCollationTraitDef.INSTANCE.canonize(collation);
     distribution = RelDistributionTraitDef.INSTANCE.canonize(distribution);
     RelTraitSet traitSet =
         input.getTraitSet().replace(Convention.NONE).replace(distribution).replace(collation);
     return new PinotLogicalSortExchange(cluster, traitSet, input, distribution,
-        collation, isSortOnSender, isSortOnReceiver);
+        collation, isSortOnSender, isSortOnReceiver, isPartitionedSort);
   }
 
   //~ Methods ----------------------------------------------------------------
@@ -92,14 +100,15 @@ public class PinotLogicalSortExchange extends SortExchange {
   public SortExchange copy(RelTraitSet traitSet, RelNode newInput,
       RelDistribution newDistribution, RelCollation newCollation) {
     return new PinotLogicalSortExchange(this.getCluster(), traitSet, newInput,
-        newDistribution, newCollation, _isSortOnSender, _isSortOnReceiver);
+        newDistribution, newCollation, _isSortOnSender, _isSortOnReceiver, _isPartitionedSort);
   }
 
   @Override
   public RelWriter explainTerms(RelWriter pw) {
     return super.explainTerms(pw)
         .item("isSortOnSender", _isSortOnSender)
-        .item("isSortOnReceiver", _isSortOnReceiver);
+        .item("isSortOnReceiver", _isSortOnReceiver)
+        .item("isPartitionedSort", _isPartitionedSort);
   }
 
   public boolean isSortOnSender() {
@@ -108,5 +117,9 @@ public class PinotLogicalSortExchange extends SortExchange {
 
   public boolean isSortOnReceiver() {
     return _isSortOnReceiver;
+  }
+
+  public boolean isPartitionedSort() {
+    return _isPartitionedSort;
   }
 }

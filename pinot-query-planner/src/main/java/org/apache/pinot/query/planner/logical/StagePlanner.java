@@ -77,12 +77,12 @@ public class StagePlanner {
     // global root needs to send results back to the ROOT, a.k.a. the client response node. the last stage only has one
     // receiver so doesn't matter what the exchange type is. setting it to SINGLETON by default.
     StageNode globalSenderNode = new MailboxSendNode(globalStageRoot.getStageId(), globalStageRoot.getDataSchema(),
-        0, RelDistribution.Type.RANDOM_DISTRIBUTED, null, null, false);
+        0, RelDistribution.Type.RANDOM_DISTRIBUTED, null, null, false, false);
     globalSenderNode.addInput(globalStageRoot);
 
     StageNode globalReceiverNode =
         new MailboxReceiveNode(0, globalStageRoot.getDataSchema(), globalStageRoot.getStageId(),
-            RelDistribution.Type.RANDOM_DISTRIBUTED, null, null, false, false, globalSenderNode);
+            RelDistribution.Type.RANDOM_DISTRIBUTED, null, null, false, false, false, globalSenderNode);
 
     QueryPlan queryPlan = StageMetadataVisitor.attachMetadata(relRoot.fields, globalReceiverNode);
 
@@ -106,16 +106,18 @@ public class StagePlanner {
       RelCollation collation = null;
       boolean isSortOnSender = false;
       boolean isSortOnReceiver = false;
+      boolean isPartitionedSort = false;
       if (isSortExchangeNode(node)) {
         collation = ((SortExchange) node).getCollation();
         if (node instanceof PinotLogicalSortExchange) {
           // These flags only take meaning if the collation is not null or empty
           isSortOnSender = ((PinotLogicalSortExchange) node).isSortOnSender();
           isSortOnReceiver = ((PinotLogicalSortExchange) node).isSortOnReceiver();
+          isPartitionedSort = ((PinotLogicalSortExchange) node).isPartitionedSort();
         }
       }
       return createSendReceivePair(nextStageRoot, distribution, collation, isSortOnSender, isSortOnReceiver,
-          currentStageId);
+          isPartitionedSort, currentStageId);
     } else {
       StageNode stageNode = RelToStageConverter.toStageNode(node, currentStageId);
       List<RelNode> inputs = node.getInputs();
@@ -134,7 +136,7 @@ public class StagePlanner {
   }
 
   private StageNode createSendReceivePair(StageNode nextStageRoot, RelDistribution distribution, RelCollation collation,
-      boolean isSortOnSender, boolean isSortOnReceiver, int currentStageId) {
+      boolean isSortOnSender, boolean isSortOnReceiver, boolean isPartitionedSort, int currentStageId) {
     List<Integer> distributionKeys = distribution.getKeys();
     RelDistribution.Type exchangeType = distribution.getType();
 
@@ -146,10 +148,11 @@ public class StagePlanner {
 
     StageNode mailboxSender = new MailboxSendNode(nextStageRoot.getStageId(), nextStageRoot.getDataSchema(),
         currentStageId, exchangeType, keySelector, collation == null ? null : collation.getFieldCollations(),
-        isSortOnSender);
+        isSortOnSender, isPartitionedSort);
     StageNode mailboxReceiver = new MailboxReceiveNode(currentStageId, nextStageRoot.getDataSchema(),
         nextStageRoot.getStageId(), exchangeType, keySelector,
-        collation == null ? null : collation.getFieldCollations(), isSortOnSender, isSortOnReceiver, mailboxSender);
+        collation == null ? null : collation.getFieldCollations(), isSortOnSender, isSortOnReceiver, isPartitionedSort,
+        mailboxSender);
     mailboxSender.addInput(nextStageRoot);
 
     return mailboxReceiver;
