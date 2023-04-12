@@ -340,6 +340,28 @@
         ]
       },
       {
+        "description": "Single empty OVER() count(*) without select col",
+        "sql": "SELECT COUNT(*) OVER() FROM {tbl}",
+        "outputs": [
+          [16],
+          [16],
+          [16],
+          [16],
+          [16],
+          [16],
+          [16],
+          [16],
+          [16],
+          [16],
+          [16],
+          [16],
+          [16],
+          [16],
+          [16],
+          [16]
+        ]
+      },
+      {
         "description": "Single OVER(ORDER BY) count with select col with global order by with LIMIT",
         "sql": "SELECT string_col, COUNT(int_col) OVER(ORDER BY string_col) FROM {tbl} ORDER BY string_col LIMIT 6",
         "comments": "Cannot use LIMIT without ORDER BY since the results can change and we cannot verify exact row outputs",

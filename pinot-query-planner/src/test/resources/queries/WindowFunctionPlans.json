@@ -15,6 +15,19 @@
         ]
       },
       {
+        "description": "single empty OVER() count(*) only",
+        "sql": "EXPLAIN PLAN FOR SELECT COUNT(*) OVER() FROM a",
+        "output": [
+          "Execution Plan",
+          "\nLogicalProject($0=[$1])",
+          "\n  LogicalWindow(window#0=[window(aggs [COUNT()])])",
+          "\n    LogicalExchange(distribution=[hash])",
+          "\n      LogicalProject(col1=[$0])",
+          "\n        LogicalTableScan(table=[[a]])",
+          "\n"
+        ]
+      },
+      {
         "description": "single empty OVER() and select col",
         "sql": "EXPLAIN PLAN FOR SELECT a.col1, SUM(a.col3) OVER() FROM a",
         "output": [

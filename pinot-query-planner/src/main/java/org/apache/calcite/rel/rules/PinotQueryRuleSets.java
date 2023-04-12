@@ -65,8 +65,9 @@ public class PinotQueryRuleSets {
 
           // convert OVER aggregate to logical WINDOW
           CoreRules.PROJECT_TO_LOGICAL_PROJECT_AND_WINDOW,
-          // push project through WINDOW
-          CoreRules.PROJECT_WINDOW_TRANSPOSE,
+          // push project through WINDOW (CoreRules.PROJECT_WINDOW_TRANSPOSE cannot be used here due to a calcite bug)
+          ProjectWindowTransposeNonEmptyProjectRule.INSTANCE,
+          ProjectWindowTransposeEmptyProjectRule.INSTANCE,
 
           // TODO: evaluate the SORT_JOIN_TRANSPOSE and SORT_JOIN_COPY rules
 
