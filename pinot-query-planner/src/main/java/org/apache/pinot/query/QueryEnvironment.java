@@ -48,7 +48,7 @@ import org.apache.calcite.sql.SqlExplainFormat;
 import org.apache.calcite.sql.SqlExplainLevel;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
-import org.apache.calcite.sql.fun.PinotOperatorTable;
+import org.apache.calcite.sql.fun.PinotOperatorTableBuiltInFunctions;
 import org.apache.calcite.sql.util.PinotChainedSqlOperatorTable;
 import org.apache.calcite.sql2rel.RelDecorrelator;
 import org.apache.calcite.sql2rel.SqlToRelConverter;
@@ -106,7 +106,8 @@ public class QueryEnvironment {
 
     _config = Frameworks.newConfigBuilder().traitDefs()
         .operatorTable(new PinotChainedSqlOperatorTable(Arrays.asList(
-            PinotOperatorTable.instance(),
+            //PinotOperatorTable.instance(),
+            PinotOperatorTableBuiltInFunctions.instance(),
             _catalogReader)))
         .defaultSchema(_rootSchema.plus())
         .sqlToRelConverterConfig(SqlToRelConverter.config()

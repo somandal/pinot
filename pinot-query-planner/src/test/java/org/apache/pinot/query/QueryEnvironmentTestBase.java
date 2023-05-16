@@ -73,6 +73,28 @@ public class QueryEnvironmentTestBase {
   @DataProvider(name = "testQueryDataProvider")
   protected Object[][] provideQueries() {
     return new Object[][] {
+        //new Object[]{"SELECT PERCENTILE(a.col3, 99.9) FROM a"},
+        new Object[]{"SELECT DISTINCTCOUNT(a.col3), count(a.col4), COUNT(DISTINCT a.col3) FROM a"},
+        new Object[]{"SELECT COUNT(DISTINCT a.col1) FROM a"},
+        new Object[]{"SELECT a.col1, COUNT(*) FROM a GROUP BY a.col1"},
+        new Object[]{"SELECT COUNT(DISTINCT a.col3), count(a.col4) FROM a"},
+        new Object[]{"SELECT DISTINCTCOUNT(a.col3), count(a.col4), COUNT(DISTINCT a.col1) FROM a"},
+        new Object[]{"SELECT a.col2, DISTINCTCOUNT(a.col3), count(a.col4), COUNT(DISTINCT a.col1) FROM a GROUP BY "
+            + "a.col2"},
+        new Object[]{"SELECT a.col1, PERCENTILETDIGEST(a.col3, 99.9, 1000), PERCENTILETDIGEST(a.col3, 50.0) FROM a "
+            + "GROUP BY a.col1"},
+        new Object[]{"SELECT PERCENTILE(a.col3, 99.9), COUNT(a.col4) FROM a "},
+        new Object[]{"SELECT MAX(a.col3), COUNT(a.col2) FROM a "},
+        new Object[]{"SELECT a.col1, MAX(a.col3), COUNT(a.col2) FROM a GROUP BY a.col1"},
+        new Object[]{"SELECT a.col1, PERCENTILE(a.col3, 99.9), COUNT(a.col4) FROM a GROUP BY a.col1"},
+        new Object[]{"SELECT a.col1, PERCENTILE(a.col3, 99.9), MAX(a.col3) FROM a GROUP BY a.col1"},
+        new Object[]{"SELECT a.col1, PERCENTILE(a.col3, 99.9), PERCENTILE(a.col3, 50.0) FROM a GROUP BY a.col1"},
+        new Object[]{"SELECT a.col1, PERCENTILE(a.col3, 99.9), KURTOSIS(a.col3) FROM a GROUP BY a.col1"},
+        new Object[]{"SELECT a.col1, PERCENTILE(a.col3, 99.9) FROM a GROUP BY a.col1"},
+        new Object[]{"SELECT a.col1, SKEWNESS(a.col3), KURTOSIS(a.col3) FROM a GROUP BY a.col1"},
+        new Object[]{"SELECT a.col1, COUNT(DISTINCT a.col3) FROM a GROUP BY a.col1"},
+        //new Object[]{"SELECT a.col1, DISTINCTCOUNT(a.col3) FROM a GROUP BY a.col1"},
+        new Object[]{"SELECT MODE(a.col3, 'MAX') FROM a"},
         new Object[]{"SELECT * FROM a UNION SELECT * FROM b"},
         new Object[]{"SELECT * FROM a UNION ALL SELECT * FROM b"},
         new Object[]{"SELECT * FROM a INTERSECT SELECT * FROM b"},

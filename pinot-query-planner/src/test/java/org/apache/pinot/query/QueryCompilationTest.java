@@ -61,7 +61,9 @@ public class QueryCompilationTest extends QueryEnvironmentTestBase {
   public void testQueryPlanWithoutException(String query)
       throws Exception {
     try {
+      System.out.println("Query: " + query);
       DispatchableSubPlan dispatchableSubPlan = _queryEnvironment.planQuery(query);
+      System.out.println("Explain plan:\n\n" + _queryEnvironment.explainQuery("EXPLAIN PLAN FOR " + query));
       Assert.assertNotNull(dispatchableSubPlan);
     } catch (RuntimeException e) {
       Assert.fail("failed to plan query: " + query, e);

@@ -32,6 +32,8 @@ public class PinotHintStrategyTable {
 
   public static final String SKIP_LEAF_STAGE_GROUP_BY_AGGREGATION = "skipLeafStageGroupByAggregation";
 
+  // Hint to denote that an aggregate reducer was added
+  public static final String INTERNAL_AGG_REDUCER_ADDED = "aggReducerAdded";
 
   private PinotHintStrategyTable() {
     // do not instantiate.
@@ -40,6 +42,7 @@ public class PinotHintStrategyTable {
   public static final HintStrategyTable PINOT_HINT_STRATEGY_TABLE = HintStrategyTable.builder()
       .hintStrategy(INTERNAL_AGG_INTERMEDIATE_STAGE, HintPredicates.AGGREGATE)
       .hintStrategy(INTERNAL_AGG_FINAL_STAGE, HintPredicates.AGGREGATE)
+      .hintStrategy(INTERNAL_AGG_REDUCER_ADDED, HintPredicates.AGGREGATE)
       .hintStrategy(SKIP_LEAF_STAGE_GROUP_BY_AGGREGATION, HintPredicates.AGGREGATE)
       .hintStrategy(PinotHintOptions.AGGREGATE_HINT_OPTIONS, HintPredicates.AGGREGATE)
       .hintStrategy(PinotHintOptions.JOIN_HINT_OPTIONS, HintPredicates.JOIN)

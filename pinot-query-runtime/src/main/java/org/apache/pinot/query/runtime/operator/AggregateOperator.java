@@ -102,10 +102,10 @@ public class AggregateOperator extends MultiStageOperator {
     for (int i = 0; i < _aggCalls.size(); i++) {
       RexExpression.FunctionCall agg = _aggCalls.get(i);
       String functionName = agg.getFunctionName();
-      if (!mergers.containsKey(functionName)) {
+      if (!mergers.containsKey(functionName.toUpperCase())) {
         throw new IllegalStateException("Unexpected value: " + functionName);
       }
-      _accumulators[i] = new AggregateAccumulator(agg, mergers, functionName, inputSchema);
+      _accumulators[i] = new AggregateAccumulator(agg, mergers, functionName.toUpperCase(), inputSchema);
     }
 
     _groupByKeyHolder = new HashMap<>();

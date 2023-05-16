@@ -28,6 +28,7 @@ import org.apache.pinot.core.query.aggregation.AggregationResultHolder;
 import org.apache.pinot.core.query.aggregation.ObjectAggregationResultHolder;
 import org.apache.pinot.core.query.aggregation.groupby.GroupByResultHolder;
 import org.apache.pinot.core.query.aggregation.groupby.ObjectGroupByResultHolder;
+import org.apache.pinot.core.query.reduce.function.InternalReduceFunctions;
 import org.apache.pinot.segment.spi.AggregationFunctionType;
 import org.apache.pinot.spi.data.FieldSpec.DataType;
 
@@ -224,7 +225,7 @@ public class PercentileTDigestAggregationFunction extends BaseSingleInputAggrega
 
   @Override
   public Double extractFinalResult(TDigest intermediateResult) {
-    return intermediateResult.quantile(_percentile / 100.0);
+    return InternalReduceFunctions.percentileTdigestReduce(intermediateResult, _percentile);
   }
 
   /**

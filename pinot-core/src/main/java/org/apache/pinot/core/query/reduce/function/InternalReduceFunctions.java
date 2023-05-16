@@ -19,6 +19,9 @@
 
 package org.apache.pinot.core.query.reduce.function;
 
+import com.tdunning.math.stats.TDigest;
+import it.unimi.dsi.fastutil.doubles.DoubleArrayList;
+import java.util.Arrays;
 import java.util.Set;
 import org.apache.pinot.segment.local.customobject.PinotFourthMoment;
 import org.apache.pinot.spi.annotations.ScalarFunction;
@@ -47,5 +50,51 @@ public class InternalReduceFunctions {
   @ScalarFunction
   public static int countDistinctReduce(Set<?> values) {
     return values.size();
+  }
+
+  @ScalarFunction
+  public static double percentileReduce(DoubleArrayList intermediateResult, double percentile) {
+    int size = intermediateResult.size();
+    if (size == 0) {
+      return Double.NEGATIVE_INFINITY;
+    } else {
+      double[] values = intermediateResult.elements();
+      Arrays.sort(values, 0, size);
+      if (percentile == 100) {
+        return values[size - 1];
+      } else {
+        return values[(int) ((long) size * percentile / 100)];
+      }
+    }
+  }
+
+  @ScalarFunction
+  public static double percentileTdigestReduce(TDigest intermediateResult, double percentile) {
+    return intermediateResult.quantile(percentile / 100.0);
+  }
+
+  @ScalarFunction
+  public static double percentileTdigestReduce(TDigest intermediateResult, double percentile, int compressionFactor) {
+    return intermediateResult.quantile(percentile / 100.0);
+  }
+
+  @ScalarFunction
+  public static double maxReduce(double intermediateResult) {
+    return intermediateResult;
+  }
+
+  @ScalarFunction
+  public static double sumReduce(double intermediateResult) {
+    return intermediateResult;
+  }
+
+  @ScalarFunction
+  public static double minReduce(double intermediateResult) {
+    return intermediateResult;
+  }
+
+  @ScalarFunction
+  public static long countReduce(long intermediateResult) {
+    return intermediateResult;
   }
 }
