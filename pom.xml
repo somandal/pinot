@@ -156,7 +156,7 @@
     <reactivestreams.version>1.0.3</reactivestreams.version>
     <jts.version>1.16.1</jts.version>
     <h3.version>4.1.1</h3.version>
-    <jmh.version>1.26</jmh.version>
+    <jmh.version>1.36</jmh.version>
     <audienceannotations.version>0.13.0</audienceannotations.version>
 
     <!-- Sets the VM argument line used when unit tests are run. -->
