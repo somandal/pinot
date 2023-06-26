@@ -20,7 +20,6 @@ package org.apache.pinot.core.query.aggregation.function;
 
 import com.google.common.base.Preconditions;
 import java.util.List;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.datasketches.tuple.aninteger.IntegerSummary;
 import org.apache.pinot.common.request.context.ExpressionContext;
 import org.apache.pinot.common.request.context.FunctionContext;
@@ -48,7 +47,8 @@ public class AggregationFunctionFactory {
    */
   public static AggregationFunction getAggregationFunction(FunctionContext function, QueryContext queryContext) {
     try {
-      String upperCaseFunctionName = StringUtils.remove(function.getFunctionName(), '_').toUpperCase();
+      String upperCaseFunctionName =
+          AggregationFunctionType.getNormalizedAggregationFunctionName(function.getFunctionName());
       List<ExpressionContext> arguments = function.getArguments();
       ExpressionContext firstArgument = arguments.get(0);
       if (upperCaseFunctionName.startsWith("PERCENTILE")) {
