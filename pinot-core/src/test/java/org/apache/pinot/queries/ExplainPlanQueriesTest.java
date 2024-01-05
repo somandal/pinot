@@ -1219,6 +1219,26 @@ public class ExplainPlanQueriesTest extends BaseQueriesTest {
   @Test
   public void testSelectAggregateUsingFilterOnTextIndexColumn() {
     // All segments match the same plan for these queries
+    String query0 =
+        "EXPLAIN PLAN FOR SELECT noIndexCol1, any_value(invertedIndexCol3), max(noIndexCol2), min(noIndexCol3) FROM testTable WHERE "
+            + "TEXT_MATCH(textIndexCol1, 'foo') GROUP BY noIndexCol1";
+    List<Object[]> result0 = new ArrayList<>();
+    result0.add(new Object[]{"BROKER_REDUCE(limit:10)", 1, 0});
+    result0.add(new Object[]{"COMBINE_GROUP_BY", 2, 1});
+    result0.add(new Object[]{
+        "PLAN_START(numSegmentsForThisPlan:4)", ExplainPlanRows.PLAN_START_IDS, ExplainPlanRows.PLAN_START_IDS
+    });
+    result0.add(new Object[]{
+        "GROUP_BY(groupKeys:noIndexCol1, noIndexCol2, aggregations:max(noIndexCol2), min(noIndexCol3))", 3, 2
+    });
+    result0.add(new Object[]{"PROJECT(noIndexCol3, noIndexCol2, noIndexCol1)", 4, 3});
+    result0.add(new Object[]{"DOC_ID_SET", 5, 4});
+    result0.add(new Object[]{
+        "FILTER_TEXT_INDEX(indexLookUp:text_index,operator:TEXT_MATCH,predicate:text_match(textIndexCol1,'foo'))", 6, 5
+    });
+    check(query0, new ResultTable(DATA_SCHEMA, result0));
+
+    // All segments match the same plan for these queries
     String query1 =
         "EXPLAIN PLAN FOR SELECT noIndexCol1, noIndexCol2, max(noIndexCol2), min(noIndexCol3) FROM testTable WHERE "
             + "TEXT_MATCH(textIndexCol1, 'foo') GROUP BY noIndexCol1, noIndexCol2";

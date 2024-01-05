@@ -74,6 +74,7 @@ import org.apache.datasketches.tuple.aninteger.IntegerSummary;
 import org.apache.datasketches.tuple.aninteger.IntegerSummaryDeserializer;
 import org.apache.pinot.common.CustomObject;
 import org.apache.pinot.common.utils.HashUtil;
+import org.apache.pinot.core.query.aggregation.utils.AnyValueObject;
 import org.apache.pinot.core.query.aggregation.utils.exprminmax.ExprMinMaxObject;
 import org.apache.pinot.core.query.distinct.DistinctTable;
 import org.apache.pinot.core.query.utils.idset.IdSet;
@@ -156,7 +157,8 @@ public class ObjectSerDeUtils {
     FloatArrayList(44),
     StringArrayList(45),
     UltraLogLog(46),
-    ThetaSketchAccumulator(47);
+    ThetaSketchAccumulator(47),
+    AnyValueObject(48);
 
     private final int _value;
 
@@ -277,6 +279,8 @@ public class ObjectSerDeUtils {
         return ObjectType.UltraLogLog;
       } else if (value instanceof ThetaSketchAccumulator) {
         return ObjectType.ThetaSketchAccumulator;
+      } else if (value instanceof AnyValueObject) {
+        return ObjectType.AnyValueObject;
       } else {
         throw new IllegalArgumentException("Unsupported type of value: " + value.getClass().getSimpleName());
       }
@@ -1523,6 +1527,37 @@ public class ObjectSerDeUtils {
         }
       };
 
+  public static final ObjectSerDe<AnyValueObject> ANY_VALUE_OBJECT_SER_DE =
+      new ObjectSerDe<AnyValueObject>() {
+
+        @Override
+        public byte[] serialize(AnyValueObject value) {
+          try {
+            return value.toBytes();
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
+        }
+
+        @Override
+        public AnyValueObject deserialize(byte[] bytes) {
+          try {
+            return AnyValueObject.fromBytes(bytes);
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
+        }
+
+        @Override
+        public AnyValueObject deserialize(ByteBuffer byteBuffer) {
+          try {
+            return AnyValueObject.fromByteBuffer(byteBuffer);
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
+        }
+      };
+
   public static final ObjectSerDe<ItemsSketch<String>> FREQUENT_STRINGS_SKETCH_SER_DE =
       new ObjectSerDe<>() {
         @Override
@@ -1665,6 +1700,7 @@ public class ObjectSerDeUtils {
       STRING_ARRAY_LIST_SER_DE,
       ULTRA_LOG_LOG_OBJECT_SER_DE,
       DATA_SKETCH_SKETCH_ACCUMULATOR_SER_DE,
+      ANY_VALUE_OBJECT_SER_DE,
   };
   //@formatter:on
 

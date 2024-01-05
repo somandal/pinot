@@ -172,7 +172,7 @@ public class ExprMinMaxTest extends BaseQueriesTest {
     QueryRewriterFactory.init(String.join(",", QueryRewriterFactory.DEFAULT_QUERY_REWRITERS_CLASS_NAMES)
         + ",org.apache.pinot.sql.parsers.rewriter.ExprMinMaxRewriter");
     ResultRewriterFactory
-        .init("org.apache.pinot.core.query.utils.rewriter.ParentAggregationResultRewriter");
+        .init("org.apache.pinot.core.query.utils.rewriter.ParentAggregationResultRewriter,org.apache.pinot.core.query.utils.rewriter.AnyValueAggregationResultRewriter");
   }
 
   @Test
@@ -204,6 +204,16 @@ public class ExprMinMaxTest extends BaseQueriesTest {
     Assert.assertTrue(brokerResponse.getProcessingExceptions().get(0).getMessage().contains(
         "Cannot compute exprminMax measuring on non-comparable type: JSON"
     ));
+  }
+
+  @Test
+  public void testBlah() {
+    //String query = "SELECT doubleColumn, any_value(longColumn), any_value(intColumn), min(doubleColumn) FROM testTable GROUP BY doubleColumn";
+    String query = "SELECT intColumn, any_value(longColumn), any_value(stringColumn), any_value(doubleColumn), min(floatColumn) FROM testTable GROUP BY intColumn LIMIT 2";
+
+    BrokerResponseNative brokerResponse = getBrokerResponse(query);
+    ResultTable resultTable = brokerResponse.getResultTable();
+    List<Object[]> rows = resultTable.getRows();
   }
 
   @Test

@@ -1067,6 +1067,8 @@ public class CommonConstants {
     public static final String CHILD_AGGREGATION_NAME_PREFIX = "child";
     public static final String CHILD_AGGREGATION_SEPERATOR = "@";
     public static final String CHILD_KEY_SEPERATOR = "_";
+
+    public static final String ANY_VALUE_NAME_PREFIX = "anyvalue";
   }
 
   /**

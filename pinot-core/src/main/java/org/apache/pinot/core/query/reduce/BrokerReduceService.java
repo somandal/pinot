@@ -155,6 +155,7 @@ public class BrokerReduceService extends BaseReduceService {
         groupTrimThresholdQueryOption != null ? groupTrimThresholdQueryOption : _groupByTrimThreshold;
 
     try {
+      System.out.println("****** cached data schema: " + cachedDataSchema.toString());
       dataTableReducer.reduceAndSetResults(rawTableName, cachedDataSchema, dataTableMap, brokerResponseNative,
           new DataTableReducerContext(_reduceExecutorService, _maxReduceThreadsPerQuery, reduceTimeOutMs,
               groupTrimThreshold, minGroupTrimSize), brokerMetrics);

@@ -434,6 +434,9 @@ public class AggregationFunctionFactory {
             return new DistinctCountULLAggregationFunction(arguments);
           case DISTINCTCOUNTRAWULL:
             return new DistinctCountRawULLAggregationFunction(arguments);
+          case ANYVALUE:
+            System.out.println("******* ANYVALUE");
+            return new AnyValueAggregationFunction(arguments, false);
           default:
             throw new IllegalArgumentException("Unsupported aggregation function type: " + functionType);
         }
