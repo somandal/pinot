@@ -6,7 +6,7 @@
     "timeType": "DAYS",
     "segmentPushType": "APPEND",
     "segmentAssignmentStrategy": "BalanceNumSegmentAssignmentStrategy",
-    "replication": "1"
+    "replication": "3"
   },
   "tenants": {},
   "fieldConfigList": [
@@ -44,7 +44,7 @@
         "coldTier": {
           "encodingType": "RAW",
           "indexes": {
-            "text": {
+            "inverted": {
               "enabled": "true"
             }
           }

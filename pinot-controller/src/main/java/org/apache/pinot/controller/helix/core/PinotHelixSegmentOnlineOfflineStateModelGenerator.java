@@ -69,7 +69,7 @@ public class PinotHelixSegmentOnlineOfflineStateModelGenerator {
     builder.dynamicUpperBound(ONLINE_STATE, "R");
     // dynamic constraint, R means it should be derived based on the replication
     // factor.
-    builder.dynamicUpperBound(CONSUMING_STATE, "R");
+    // builder.dynamicUpperBound(CONSUMING_STATE, "R");
 
     StateModelDefinition statemodelDefinition = builder.build();
     return statemodelDefinition;

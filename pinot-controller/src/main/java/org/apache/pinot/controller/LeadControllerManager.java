@@ -220,6 +220,7 @@ public class LeadControllerManager {
       return;
     }
 
+    LOGGER.info("************** onResourceConfigChange() fired ***************");
     boolean leadControllerResourceEnabled;
     try {
       leadControllerResourceEnabled = LeadControllerUtils.isLeadControllerResourceEnabled(_helixManager);

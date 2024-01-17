@@ -1221,9 +1221,11 @@ public class PinotLLCRealtimeSegmentManagerTest {
     void updateIdealStateOnSegmentCompletion(String realtimeTableName, String committingSegmentName,
         String newSegmentName, SegmentAssignment segmentAssignment,
         Map<InstancePartitionsType, InstancePartitions> instancePartitionsMap) {
-      updateInstanceStatesForNewConsumingSegment(_idealState.getRecord().getMapFields(), committingSegmentName, null,
+      updateInstanceStatesForNewConsumingSegment(_idealState.getRecord().getMapFields(),
+          _idealState.getRecord().getListFields(), committingSegmentName, null,
           segmentAssignment, instancePartitionsMap);
-      updateInstanceStatesForNewConsumingSegment(_idealState.getRecord().getMapFields(), null, newSegmentName,
+      updateInstanceStatesForNewConsumingSegment(_idealState.getRecord().getMapFields(),
+          _idealState.getRecord().getListFields(), null, newSegmentName,
           segmentAssignment, instancePartitionsMap);
     }
 

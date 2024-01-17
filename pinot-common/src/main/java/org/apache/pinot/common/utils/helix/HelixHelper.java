@@ -185,9 +185,12 @@ public class HelixHelper {
             String partitionName = it.next();
             int numChars = partitionName.length();
             Map<String, String> stateMap = is.getInstanceStateMap(partitionName);
-            for (Map.Entry<String, String> entry : stateMap.entrySet()) {
-              numChars += entry.getKey().length();
-              numChars += entry.getValue().length();
+            if (stateMap != null) {
+              // The stateMap might be NULL for FULL-AUTO segments, so always do this NULL check
+              for (Map.Entry<String, String> entry : stateMap.entrySet()) {
+                numChars += entry.getKey().length();
+                numChars += entry.getValue().length();
+              }
             }
             numChars *= is.getNumPartitions();
             if (_minNumCharsInISToTurnOnCompression > 0
@@ -200,6 +203,7 @@ public class HelixHelper {
       });
       return idealStateWrapper._idealState;
     } catch (Exception e) {
+      LOGGER.error("Caught exception while updating ideal state for resource: " + resourceName, e);
       throw new RuntimeException("Caught exception while updating ideal state for resource: " + resourceName, e);
     }
   }

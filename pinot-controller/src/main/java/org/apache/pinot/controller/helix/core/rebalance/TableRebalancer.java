@@ -21,6 +21,7 @@ package org.apache.pinot.controller.helix.core.rebalance;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -156,6 +157,16 @@ public class TableRebalancer {
             TimeUnit.MILLISECONDS);
       }
     }
+  }
+
+  private Map<String, List<String>> convertTargetAssignmentToListFields(
+      Map<String, Map<String, String>> targetAssignment, boolean setInstances) {
+    Map<String, List<String>> convertedListField = new HashMap<>();
+    for (Map.Entry<String, Map<String, String>> entry : targetAssignment.entrySet()) {
+      List<String> value = setInstances ? new ArrayList<>(entry.getValue().keySet()) : Collections.emptyList();
+      convertedListField.put(entry.getKey(), value);
+    }
+    return convertedListField;
   }
 
   private RebalanceResult doRebalance(TableConfig tableConfig, RebalanceConfig rebalanceConfig,
@@ -299,8 +310,19 @@ public class TableRebalancer {
       LOGGER.info("For rebalanceId: {}, rebalancing table: {} with downtime", rebalanceJobId, tableNameWithType);
 
       // Reuse current IdealState to update the IdealState in cluster
+      // TODO: Assess how rebalance will change if we use FULL-AUTO mode. In FULL-AUTO mode the mapFields should not
+      //       be set up at all. Maybe we don't even need this TableRebalancer?
+      TableType tableType = tableConfig.getTableType();
       ZNRecord idealStateRecord = currentIdealState.getRecord();
-      idealStateRecord.setMapFields(targetAssignment);
+      if (tableType == TableType.REALTIME) {
+        // TODO: Only set listFields once REALTIME tables use FULL-AUTO
+        idealStateRecord.setMapFields(targetAssignment);
+      } else {
+        // TODO: Assess whether we should set the preferred host list or not, for now setting empty list
+        Map<String, List<String>> listFieldsConverted = convertTargetAssignmentToListFields(targetAssignment, false);
+        idealStateRecord.setListFields(listFieldsConverted);
+      }
+      // idealStateRecord.setMapFields(targetAssignment);
       currentIdealState.setNumPartitions(targetAssignment.size());
       currentIdealState.setReplicas(Integer.toString(targetAssignment.values().iterator().next().size()));
 
@@ -496,7 +518,18 @@ public class TableRebalancer {
           SegmentAssignmentUtils.getNumSegmentsToBeMovedPerInstance(currentAssignment, nextAssignment));
 
       // Reuse current IdealState to update the IdealState in cluster
-      idealStateRecord.setMapFields(nextAssignment);
+      // TODO: Assess how rebalance will change if we use FULL-AUTO mode. In FULL-AUTO mode the mapFields should not
+      //       be set up at all. Maybe we don't even need this TableRebalancer?
+      TableType tableType = tableConfig.getTableType();
+      if (tableType == TableType.REALTIME) {
+        // TODO: Only set listFields once REALTIME tables use FULL-AUTO
+        idealStateRecord.setMapFields(targetAssignment);
+      } else {
+        // TODO: Assess whether we should set the preferred host list or not, for now setting empty list
+        Map<String, List<String>> listFieldsConverted = convertTargetAssignmentToListFields(targetAssignment, false);
+        idealStateRecord.setListFields(listFieldsConverted);
+      }
+      // idealStateRecord.setMapFields(nextAssignment);
       idealState.setNumPartitions(nextAssignment.size());
       idealState.setReplicas(Integer.toString(nextAssignment.values().iterator().next().size()));
 
@@ -598,7 +631,7 @@ public class TableRebalancer {
           if (!dryRun && !instancePartitionsUnchanged) {
             LOGGER.info("Persisting instance partitions: {} to ZK", instancePartitions);
             InstancePartitionsUtils.persistInstancePartitions(_helixManager.getHelixPropertyStore(),
-                instancePartitions);
+                _helixManager.getConfigAccessor(), _helixManager.getClusterName(), instancePartitions);
           }
         } else {
           String referenceInstancePartitionsName = tableConfig.getInstancePartitionsMap().get(instancePartitionsType);
@@ -614,7 +647,7 @@ public class TableRebalancer {
               LOGGER.info("Persisting instance partitions: {} (based on {})", instancePartitions,
                   preConfiguredInstancePartitions);
               InstancePartitionsUtils.persistInstancePartitions(_helixManager.getHelixPropertyStore(),
-                  instancePartitions);
+                  _helixManager.getConfigAccessor(), _helixManager.getClusterName(), instancePartitions);
             }
           } else {
             instancePartitions =
@@ -625,7 +658,7 @@ public class TableRebalancer {
               LOGGER.info("Persisting instance partitions: {} (referencing {})", instancePartitions,
                   referenceInstancePartitionsName);
               InstancePartitionsUtils.persistInstancePartitions(_helixManager.getHelixPropertyStore(),
-                  instancePartitions);
+                  _helixManager.getConfigAccessor(), _helixManager.getClusterName(), instancePartitions);
             }
           }
         }
@@ -730,7 +763,8 @@ public class TableRebalancer {
         boolean instancePartitionsUnchanged = instancePartitions.equals(existingInstancePartitions);
         if (!dryRun && !instancePartitionsUnchanged) {
           LOGGER.info("Persisting instance partitions: {} to ZK", instancePartitions);
-          InstancePartitionsUtils.persistInstancePartitions(_helixManager.getHelixPropertyStore(), instancePartitions);
+          InstancePartitionsUtils.persistInstancePartitions(_helixManager.getHelixPropertyStore(),
+              _helixManager.getConfigAccessor(), _helixManager.getClusterName(), instancePartitions);
         }
         return Pair.of(instancePartitions, instancePartitionsUnchanged);
       }

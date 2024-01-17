@@ -51,7 +51,8 @@ public class HybridQuickstart extends Quickstart {
   public Map<String, Object> getConfigOverrides() {
     Map<String, Object> overrides = new HashMap<>(super.getConfigOverrides());
     overrides.put("pinot.server.grpc.enable", "true");
-    overrides.put("pinot.server.grpc.port", "8090");
+    // Commenting out the below to allow running more than 1 server
+    // overrides.put("pinot.server.grpc.port", "8090");
     return overrides;
   }
 
@@ -114,7 +115,7 @@ public class HybridQuickstart extends Quickstart {
     quickstartTableRequests.addAll(bootstrapOfflineTableDirectories(quickstartTmpDir));
     quickstartTableRequests.addAll(bootstrapStreamTableDirectories(quickstartTmpDir));
     final QuickstartRunner runner =
-        new QuickstartRunner(new ArrayList<>(quickstartTableRequests), 1, 1, 1, 1, quickstartRunnerDir,
+        new QuickstartRunner(new ArrayList<>(quickstartTableRequests), 1, 1, 4, 1, quickstartRunnerDir,
             getConfigOverrides());
 
     startKafka();

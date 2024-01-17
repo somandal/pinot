@@ -579,10 +579,15 @@ public abstract class BaseServerStarter implements ServiceStartable {
     Tracing.ThreadAccountantOps
         .initializeThreadAccountant(_serverConf.subset(CommonConstants.PINOT_QUERY_SCHEDULER_PREFIX), _instanceId);
     initSegmentFetcher(_serverConf);
-    StateModelFactory<?> stateModelFactory =
+    StateModelFactory<?> stateModelFactoryWithRealtime =
         new SegmentOnlineOfflineStateModelFactory(_instanceId, instanceDataManager);
+    StateModelFactory<?> stateModelFactory =
+        new OfflineSegmentOnlineOfflineStateModelFactory(_instanceId, instanceDataManager);
     _helixManager.getStateMachineEngine()
-        .registerStateModelFactory(SegmentOnlineOfflineStateModelFactory.getStateModelName(), stateModelFactory);
+        .registerStateModelFactory(OfflineSegmentOnlineOfflineStateModelFactory.getStateModelName(), stateModelFactory);
+    _helixManager.getStateMachineEngine()
+        .registerStateModelFactory(SegmentOnlineOfflineStateModelFactory.getStateModelName(),
+            stateModelFactoryWithRealtime);
     // Start the data manager as a pre-connect callback so that it starts after connecting to the ZK in order to access
     // the property store, but before receiving state transitions
     _helixManager.addPreConnectCallback(_serverInstance::startDataManager);

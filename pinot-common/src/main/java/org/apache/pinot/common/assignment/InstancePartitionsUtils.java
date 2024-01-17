@@ -23,7 +23,9 @@ import java.util.Collections;
 import java.util.List;
 import javax.annotation.Nullable;
 import org.apache.helix.AccessOption;
+import org.apache.helix.ConfigAccessor;
 import org.apache.helix.HelixManager;
+import org.apache.helix.model.ResourceConfig;
 import org.apache.helix.store.HelixPropertyStore;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
 import org.apache.helix.zookeeper.datamodel.ZNRecord;
@@ -165,12 +167,19 @@ public class InstancePartitionsUtils {
    * Persists the instance partitions to Helix property store.
    */
   public static void persistInstancePartitions(HelixPropertyStore<ZNRecord> propertyStore,
-      InstancePartitions instancePartitions) {
+      ConfigAccessor configAccessor, String helixClusterName, InstancePartitions instancePartitions) {
     String path = ZKMetadataProvider
         .constructPropertyStorePathForInstancePartitions(instancePartitions.getInstancePartitionsName());
     if (!propertyStore.set(path, instancePartitions.toZNRecord(), AccessOption.PERSISTENT)) {
       throw new ZkException("Failed to persist instance partitions: " + instancePartitions);
     }
+
+    // Set the INSTANCE_PARTITIONS under the RESOURCE config (only modifying set path for now to ensure it works)
+    // This is just a test to see how to access and update the CONFIG/RESOURCES
+    String resourceName = "INSTANCE_PARTITION_" + instancePartitions.getInstancePartitionsName();
+    ResourceConfig resourceConfig = new ResourceConfig(resourceName);
+    resourceConfig.setPreferenceLists(instancePartitions.getPartitionToInstancesMap());
+    configAccessor.setResourceConfig(helixClusterName, resourceName, resourceConfig);
   }
 
   /**

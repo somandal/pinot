@@ -44,6 +44,14 @@ import org.slf4j.LoggerFactory;
  * 1. Add a new segment
  * 2. Refresh an existed now serving segment.
  * 3. Delete an existed segment.
+ *
+ * TODO: Assess how to handle this state model for FULL-AUTO. Today we have states such as A -> B, B -> C and A -> C.
+ *       FULL-AUTO optimizes such transitions and only calls A -> C in such cases. Due to semantics we need to allow
+ *       REALTIME segments to directly move from OFFLINE -> ONLINE for completed segments which violates what FULL-AUTO
+ *       does. Due to this limitation we never see transitions from OFFLINE -> CONSUMING even though we need this
+ *       transition for all new CONSUMING segments.
+ *       To unblock the POC, for now we have moved the OFFLINE segment state model to a different
+ *       class: OfflineSegmentOnlineOfflineStateModelFactory
  */
 public class SegmentOnlineOfflineStateModelFactory extends StateModelFactory<StateModel> {
   private final String _instanceId;
@@ -76,6 +84,15 @@ public class SegmentOnlineOfflineStateModelFactory extends StateModelFactory<Sta
       _logger.info("SegmentOnlineOfflineStateModel.onBecomeConsumingFromOffline() : " + message);
       String realtimeTableName = message.getResourceName();
       String segmentName = message.getPartitionName();
+
+      // TODO: This may not be needed if we split the state models between OFFLINE and REALTIME. Commented out for now
+//      TableType tableType = TableNameBuilder.getTableTypeFromTableName(realtimeTableName);
+//      Preconditions.checkNotNull(tableType);
+//      if (tableType == TableType.OFFLINE) {
+//        _logger.info("OFFLINE->CONSUMING state transition called for OFFLINE table, treat this as a no-op");
+//        return;
+//      }
+
       try {
         _instanceDataManager.addRealtimeSegment(realtimeTableName, segmentName);
       } catch (Exception e) {
@@ -97,6 +114,26 @@ public class SegmentOnlineOfflineStateModelFactory extends StateModelFactory<Sta
       _logger.info("SegmentOnlineOfflineStateModel.onBecomeOnlineFromConsuming() : " + message);
       String realtimeTableName = message.getResourceName();
       String segmentName = message.getPartitionName();
+      TableType tableType = TableNameBuilder.getTableTypeFromTableName(realtimeTableName);
+      Preconditions.checkNotNull(tableType);
+
+      // TODO: This may not be needed if we split the state models between OFFLINE and REALTIME. Commented out for now
+//      if (tableType == TableType.OFFLINE) {
+//        try {
+//          _instanceDataManager.addOrReplaceSegment(realtimeTableName, segmentName);
+//        } catch (Exception e) {
+//          String errorMessage = String.format(
+//              "Caught exception in state transition CONSUMING -> ONLINE for table: %s, segment: %s",
+//              realtimeTableName, segmentName);
+//          _logger.error(errorMessage, e);
+//          TableDataManager tableDataManager = _instanceDataManager.getTableDataManager(realtimeTableName);
+//          if (tableDataManager != null) {
+//            tableDataManager.addSegmentError(segmentName, new SegmentErrorInfo(System.currentTimeMillis(),
+//                errorMessage, e));
+//          }
+//          Utils.rethrowException(e);
+//        }
+//      } else {
       TableDataManager tableDataManager = _instanceDataManager.getTableDataManager(realtimeTableName);
       Preconditions.checkState(tableDataManager != null, "Failed to find table: %s", realtimeTableName);
       tableDataManager.onConsumingToOnline(segmentName);
@@ -131,6 +168,7 @@ public class SegmentOnlineOfflineStateModelFactory extends StateModelFactory<Sta
         tableDataManager.releaseSegment(acquiredSegment);
       }
     }
+//    }
 
     @Transition(from = "CONSUMING", to = "OFFLINE")
     public void onBecomeOfflineFromConsuming(Message message, NotificationContext context) {

@@ -29,6 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -45,6 +46,7 @@ import org.apache.pinot.common.utils.HashUtil;
 import org.apache.pinot.common.utils.config.TableConfigUtils;
 import org.apache.pinot.common.utils.helix.HelixHelper;
 import org.apache.pinot.spi.config.table.TableConfig;
+import org.apache.pinot.spi.config.table.TableType;
 import org.apache.pinot.spi.utils.JsonUtils;
 import org.apache.pinot.spi.utils.builder.TableNameBuilder;
 import org.apache.pinot.spi.utils.retry.RetryPolicies;
@@ -210,9 +212,22 @@ public class MoveReplicaGroup extends AbstractBaseAdminCommand implements Comman
       @Override
       public IdealState apply(@Nullable IdealState input) {
         Map<String, Map<String, String>> existingMapField = input.getRecord().getMapFields();
+        Map<String, List<String>> existingListField = input.getRecord().getListFields();
 
+        TableType tableType = TableNameBuilder.getTableTypeFromTableName(_tableName);
         for (Map.Entry<String, Map<String, String>> segmentEntry : proposedIdealState.entrySet()) {
-          existingMapField.put(segmentEntry.getKey(), segmentEntry.getValue());
+          // existingMapField.put(segmentEntry.getKey(), segmentEntry.getValue());
+          if (tableType == TableType.REALTIME) {
+            // TODO: Update listField only once REALTIME uses FULL-AUTO
+            existingMapField.put(segmentEntry.getKey(), segmentEntry.getValue());
+          } else {
+            String segmentName = segmentEntry.getKey();
+            Map<String, String> segmentMapping = segmentEntry.getValue();
+            List<String> listOfHosts = new ArrayList<>(segmentMapping.keySet());
+            Collections.sort(listOfHosts);
+            // TODO: Assess if we want to add the preferred list of hosts or not
+            existingListField.put(segmentName, Collections.emptyList() /* listOfHosts */);
+          }
         }
         return input;
       }

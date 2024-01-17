@@ -301,7 +301,9 @@ public class PinotInstanceAssignmentRestletResource {
   private void persistInstancePartitionsHelper(InstancePartitions instancePartitions) {
     try {
       LOGGER.info("Persisting instance partitions: {}", instancePartitions);
-      InstancePartitionsUtils.persistInstancePartitions(_resourceManager.getPropertyStore(), instancePartitions);
+      InstancePartitionsUtils.persistInstancePartitions(_resourceManager.getPropertyStore(),
+          _resourceManager.getHelixZkManager().getConfigAccessor(), _resourceManager.getHelixClusterName(),
+          instancePartitions);
     } catch (Exception e) {
       throw new ControllerApplicationException(LOGGER, "Caught Exception while persisting the instance partitions",
           Response.Status.INTERNAL_SERVER_ERROR, e);

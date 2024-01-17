@@ -157,7 +157,7 @@ public class QuickstartRunner {
           .setZkAddress(_zkExternalAddress != null ? _zkExternalAddress : ZK_ADDRESS).setClusterName(CLUSTER_NAME)
           .setDataDir(new File(_tempDir, DEFAULT_SERVER_DATA_DIR + i).getAbsolutePath())
           .setSegmentDir(new File(_tempDir, DEFAULT_SERVER_SEGMENT_DIR + i).getAbsolutePath())
-          .setConfigOverrides(_configOverrides);
+          .setConfigOverrides(_configOverrides).setMultiStageServerPort(8040 + i).setMultiStageRunnerPort(8100 + i);
       if (!serverStarter.execute()) {
         throw new RuntimeException("Failed to start Server");
       }

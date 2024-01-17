@@ -19,8 +19,10 @@
 package org.apache.pinot.controller.helix.core;
 
 import java.util.List;
+import org.apache.helix.controller.rebalancer.strategy.CrushEdRebalanceStrategy;
 import org.apache.helix.model.IdealState;
 import org.apache.helix.model.builder.CustomModeISBuilder;
+import org.apache.helix.model.builder.FullAutoModeISBuilder;
 import org.apache.pinot.spi.stream.PartitionGroupConsumptionStatus;
 import org.apache.pinot.spi.stream.PartitionGroupMetadata;
 import org.apache.pinot.spi.stream.PartitionGroupMetadataFetcher;
@@ -41,11 +43,39 @@ public class PinotTableIdealStateBuilder {
 
   public static IdealState buildEmptyIdealStateFor(String tableNameWithType, int numReplicas,
       boolean enableBatchMessageMode) {
+    LOGGER.info("Building CUSTOM IdealState for Table: {}, numReplicas: {}", tableNameWithType, numReplicas);
     CustomModeISBuilder customModeIdealStateBuilder = new CustomModeISBuilder(tableNameWithType);
     customModeIdealStateBuilder
         .setStateModel(PinotHelixSegmentOnlineOfflineStateModelGenerator.PINOT_SEGMENT_ONLINE_OFFLINE_STATE_MODEL)
         .setNumPartitions(0).setNumReplica(numReplicas).setMaxPartitionsPerNode(1);
     IdealState idealState = customModeIdealStateBuilder.build();
+    idealState.setInstanceGroupTag(tableNameWithType);
+    idealState.setBatchMessageMode(enableBatchMessageMode);
+    return idealState;
+  }
+
+  public static IdealState buildEmptyFullAutoIdealStateFor(String tableNameWithType, int numReplicas,
+      boolean enableBatchMessageMode) {
+    LOGGER.info("Building FULL-AUTO IdealState for Table: {}, numReplicas: {}", tableNameWithType, numReplicas);
+    // FULL-AUTO Segment Online-Offline state model with a rebalance strategy, crushed auto-rebalance by default
+    // TODO: The state model used only works for OFFLINE tables today. Add support for REALTIME state model too
+    FullAutoModeISBuilder idealStateBuilder = new FullAutoModeISBuilder(tableNameWithType);
+    idealStateBuilder
+        .setStateModel(
+            PinotHelixOfflineSegmentOnlineOfflineStateModelGenerator.PINOT_OFFLINE_SEGMENT_ONLINE_OFFLINE_STATE_MODEL)
+        .setNumPartitions(0).setNumReplica(numReplicas).setMaxPartitionsPerNode(1)
+        // TODO: Revisit the rebalance strategy to use (maybe we add a custom one)
+        .setRebalanceStrategy(CrushEdRebalanceStrategy.class.getName());
+    // The below config guarantees if active number of replicas is no less than minimum active replica, there will
+    // not be partition movements happened.
+    // Set min active replicas to 0 and rebalance delay to 5 minutes so that if any master goes offline, Helix
+    // controller waits at most 5 minutes and then re-calculate the participant assignment.
+    // TODO: Assess which of these values need to be tweaked, removed, and what additional values that need to be added
+    idealStateBuilder.setMinActiveReplica(numReplicas - 1);
+    idealStateBuilder.setRebalanceDelay(300_000);
+    idealStateBuilder.enableDelayRebalance();
+    // Set instance group tag
+    IdealState idealState = idealStateBuilder.build();
     idealState.setInstanceGroupTag(tableNameWithType);
     idealState.setBatchMessageMode(enableBatchMessageMode);
     return idealState;

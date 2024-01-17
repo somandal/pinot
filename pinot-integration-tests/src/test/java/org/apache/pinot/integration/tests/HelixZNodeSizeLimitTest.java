@@ -19,7 +19,8 @@
 
 package org.apache.pinot.integration.tests;
 
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableList;
+import java.util.List;
 import java.util.Map;
 import org.apache.helix.zookeeper.constant.ZkSystemPropertyKeys;
 import org.apache.pinot.common.utils.helix.HelixHelper;
@@ -83,15 +84,23 @@ public class HelixZNodeSizeLimitTest extends BaseClusterIntegrationTest {
     try {
       HelixHelper.updateIdealState(_helixManager, tableNameWithType, idealState -> {
         Map<String, Map<String, String>> currentAssignment = idealState.getRecord().getMapFields();
+        Map<String, List<String>> currentAssignmentList = idealState.getRecord().getListFields();
         for (int i = 0; i < 500_000; i++) {
-          currentAssignment.put("segment_" + i,
-              ImmutableMap.of("Server_with_some_reasonable_long_prefix_" + (i % 10), "ONLINE"));
-          currentAssignment.put("segment_" + i,
-              ImmutableMap.of("Server_with_some_reasonable_long_prefix_" + (i % 9), "ONLINE"));
+         // currentAssignment.put("segment_" + i,
+         //     ImmutableMap.of("Server_with_some_reasonable_long_prefix_" + (i % 10), "ONLINE"));
+         // currentAssignment.put("segment_" + i,
+         //     ImmutableMap.of("Server_with_some_reasonable_long_prefix_" + (i % 9), "ONLINE"));
+          currentAssignmentList.put("segment_" + i,
+              ImmutableList.of("Server_with_some_reasonable_long_prefix_" + (i % 10)));
+          currentAssignmentList.put("segment_" + i,
+              ImmutableList.of("Server_with_some_reasonable_long_prefix_" + (i % 9)));
         }
         return idealState;
       });
     } catch (Exception e) {
+      System.out.println("exception: " + e);
+      System.out.println("exception: " + e.getMessage());
+      System.out.println("exception: " + e.getCause());
       Assert.fail("Exception shouldn't be thrown even if the data size of the ideal state is larger than 1M");
     }
   }

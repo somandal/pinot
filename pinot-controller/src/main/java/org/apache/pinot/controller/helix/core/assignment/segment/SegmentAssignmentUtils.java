@@ -21,6 +21,7 @@ package org.apache.pinot.controller.helix.core.assignment.segment;
 import com.google.common.base.Preconditions;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -270,6 +271,13 @@ public class SegmentAssignmentUtils {
       instanceStateMap.put(instanceName, state);
     }
     return instanceStateMap;
+  }
+
+  public static List<String> getInstanceStateList(Collection<String> instances) {
+    List<String> instanceStateList = new ArrayList<>();
+    instanceStateList.addAll(instances);
+    Collections.sort(instanceStateList);
+    return instanceStateList;
   }
 
   /**

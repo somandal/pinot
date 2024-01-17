@@ -1579,16 +1579,29 @@ public class PinotHelixResourceManager {
     LOGGER.info("Adding table {}: Validate table configs", tableNameWithType);
     validateTableTenantConfig(tableConfig);
 
-    IdealState idealState =
-        PinotTableIdealStateBuilder.buildEmptyIdealStateFor(tableNameWithType, tableConfig.getReplication(),
-            _enableBatchMessageMode);
     TableType tableType = tableConfig.getTableType();
+    Preconditions.checkState(tableType == TableType.OFFLINE || tableType == TableType.REALTIME,
+        "Invalid table type: %s", tableType);
+
+    IdealState idealState;
+    if (tableType == TableType.REALTIME) {
+      idealState =
+           PinotTableIdealStateBuilder.buildEmptyIdealStateFor(tableNameWithType, tableConfig.getReplication(),
+               _enableBatchMessageMode);
+    } else {
+      // Creates a FULL-AUTO based ideal state, supported for OFFLINE tables only
+      idealState =
+          PinotTableIdealStateBuilder.buildEmptyFullAutoIdealStateFor(tableNameWithType, tableConfig.getReplication(),
+              _enableBatchMessageMode);
+    }
+   // IdealState idealState =
+   //     PinotTableIdealStateBuilder.buildEmptyIdealStateFor(tableNameWithType, tableConfig.getReplication(),
+   //         _enableBatchMessageMode);
+
     // Ensure that table is not created if schema is not present
     if (ZKMetadataProvider.getSchema(_propertyStore, TableNameBuilder.extractRawTableName(tableNameWithType)) == null) {
       throw new InvalidTableConfigException("No schema defined for table: " + tableNameWithType);
     }
-    Preconditions.checkState(tableType == TableType.OFFLINE || tableType == TableType.REALTIME,
-        "Invalid table type: %s", tableType);
 
     // Add table config
     LOGGER.info("Adding table {}: Creating table config in the property store", tableNameWithType);
@@ -1785,7 +1798,8 @@ public class PinotHelixResourceManager {
                 referenceInstancePartitionsName);
           }
         }
-        InstancePartitionsUtils.persistInstancePartitions(_propertyStore, instancePartitions);
+        InstancePartitionsUtils.persistInstancePartitions(_propertyStore, _helixZkManager.getConfigAccessor(),
+            _helixClusterName, instancePartitions);
       }
     }
 
@@ -1803,7 +1817,8 @@ public class PinotHelixResourceManager {
                 instanceAssignmentDriver.assignInstances(tierConfig.getName(), instanceConfigs, null,
                     tableConfig.getInstanceAssignmentConfigMap().get(tierConfig.getName()));
             LOGGER.info("Persisting instance partitions: {}", instancePartitions);
-            InstancePartitionsUtils.persistInstancePartitions(_propertyStore, instancePartitions);
+            InstancePartitionsUtils.persistInstancePartitions(_propertyStore, _helixZkManager.getConfigAccessor(),
+                _helixClusterName, instancePartitions);
           }
         }
       }
@@ -2243,7 +2258,8 @@ public class PinotHelixResourceManager {
         HelixHelper.updateIdealState(_helixZkManager, tableNameWithType, idealState -> {
           assert idealState != null;
           Map<String, Map<String, String>> currentAssignment = idealState.getRecord().getMapFields();
-          if (currentAssignment.containsKey(segmentName)) {
+          Map<String, List<String>> currentAssignmentList = idealState.getRecord().getListFields();
+          if (currentAssignment.containsKey(segmentName) && currentAssignmentList.containsKey(segmentName)) {
             LOGGER.warn("Segment: {} already exists in the IdealState for table: {}, do not update", segmentName,
                 tableNameWithType);
           } else {
@@ -2251,8 +2267,18 @@ public class PinotHelixResourceManager {
                 segmentAssignment.assignSegment(segmentName, currentAssignment, finalInstancePartitionsMap);
             LOGGER.info("Assigning segment: {} to instances: {} for table: {}", segmentName, assignedInstances,
                 tableNameWithType);
-            currentAssignment.put(segmentName,
-                SegmentAssignmentUtils.getInstanceStateMap(assignedInstances, SegmentStateModel.ONLINE));
+            TableType tableType = TableNameBuilder.getTableTypeFromTableName(tableNameWithType);
+            if (tableType == TableType.REALTIME) {
+              // TODO: Once REALTIME uses FULL-AUTO only the listFields should be updated
+              currentAssignment.put(segmentName,
+                  SegmentAssignmentUtils.getInstanceStateMap(assignedInstances, SegmentStateModel.ONLINE));
+            } else {
+              // TODO: Assess whether to pass in an empty instance list or to set the preferred list
+              currentAssignmentList.put(segmentName, Collections.emptyList()
+                  /* SegmentAssignmentUtils.getInstanceStateList(assignedInstances) */);
+            }
+            // currentAssignment.put(segmentName,
+            //     SegmentAssignmentUtils.getInstanceStateMap(assignedInstances, SegmentStateModel.ONLINE));
           }
           return idealState;
         });
